@@ -55,6 +55,18 @@ CREATE TABLE IF NOT EXISTS signals (
 CREATE INDEX IF NOT EXISTS ix_signals_kind_detected ON signals(kind, detected_at);
 CREATE INDEX IF NOT EXISTS ix_signals_match ON signals(match_id, detected_at DESC);
 
+-- ── Logs ──
+CREATE TABLE IF NOT EXISTS logs (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    level VARCHAR(20),
+    source VARCHAR(50),
+    message TEXT NOT NULL,
+    meta_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS ix_logs_timestamp ON logs(timestamp);
+
 -- ── Helpers ──
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$

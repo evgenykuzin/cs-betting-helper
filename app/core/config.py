@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     suspicious_drop_pct: float = 25.0
     suspicious_books_moved: int = 4
 
+    # --- Retention policies (days) ---
+    log_retention_days_info: int = 7    # INFO/WARNING logs
+    log_retention_days_error: int = 30  # ERROR logs
+    odds_retention_days: int = 30       # odds snapshots
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.tasks.celery_app import celery
 from app.db.session import get_engine, get_session_factory
-from app.db.models import Match, OddsSnapshot, Signal
+from app.db.models import Match, OddsSnapshot, Signal, Log
 from app.providers.oddspapi import OddsPapiClient
 from app.analysis.engine import run_all, compare_odds
 from app.bot.telegram import send_signal_alert
@@ -30,6 +30,21 @@ def _run_async(coro):
         loop.close()
 
 
+async def _write_log(level: str, source: str, message: str, meta: dict | None = None):
+    """Write log entry to database."""
+    factory = get_session_factory()
+    async with factory() as session:
+        log_entry = Log(
+            timestamp=datetime.utcnow(),
+            level=level,
+            source=source,
+            message=message,
+            meta_json=json.dumps(meta) if meta else None,
+        )
+        session.add(log_entry)
+        await session.commit()
+
+
 @celery.task(name="app.tasks.polling.poll_all_matches")
 def poll_all_matches():
     """Main periodic task: fetch fixtures → fetch odds → analyse → alert."""
@@ -44,6 +59,7 @@ async def _poll_all_matches_async():
     try:
         fixtures = await client.fetch_fixtures(sport="cs2", has_odds=True)
         log.info("poll_start", fixtures=len(fixtures))
+        await _write_log("INFO", "polling", f"Poll started, {len(fixtures)} fixtures")
 
         async with factory() as session:
             for fix in fixtures:
@@ -51,6 +67,7 @@ async def _poll_all_matches_async():
                     await _process_fixture(fix, client, session, settings)
                 except Exception:
                     log.exception("fixture_error", fixture_id=fix.get("fixtureId"))
+                    await _write_log("ERROR", "polling", f"Fixture error {fix.get('fixtureId')}")
             await session.commit()
 
     finally:
@@ -136,24 +153,62 @@ async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings)
         if sig.get("severity") in ("warning", "critical"):
             match_label = f"{fix.get('participant1Name')} vs {fix.get('participant2Name')}"
             await send_signal_alert(sig, match_label, fix.get("tournamentName", ""))
+            await _write_log("INFO", "telegram", f"Alert sent: {sig['kind']}", {
+                "match": match_label, "title": sig["title"],
+            })
 
     if signals:
         log.info("signals_detected", fixture=fixture_id, count=len(signals))
+        await _write_log("INFO", "analysis", f"{len(signals)} signals detected", {
+            "fixture_id": fixture_id, "signals": [s["kind"] for s in signals],
+        })
 
 
 @celery.task(name="app.tasks.polling.cleanup_old_data")
 def cleanup_old_data():
-    """Remove snapshots older than 30 days."""
+    """Remove snapshots older than retention days."""
     _run_async(_cleanup_async())
 
 
 async def _cleanup_async():
+    settings = get_settings()
     factory = get_session_factory()
     async with factory() as session:
-        cutoff = datetime.utcnow() - timedelta(days=30)
+        cutoff = datetime.utcnow() - timedelta(days=settings.odds_retention_days)
         await session.execute(
             text("DELETE FROM odds_snapshots WHERE timestamp < :cutoff"),
             {"cutoff": cutoff},
         )
         await session.commit()
         log.info("cleanup_done", cutoff=cutoff.isoformat())
+        await _write_log("INFO", "cleanup", f"Odds cleanup completed, cutoff {cutoff.date()}")
+
+
+@celery.task(name="app.tasks.polling.cleanup_old_logs")
+def cleanup_old_logs():
+    """Remove old logs based on retention policy."""
+    _run_async(_cleanup_logs_async())
+
+
+async def _cleanup_logs_async():
+    settings = get_settings()
+    factory = get_session_factory()
+    async with factory() as session:
+        # Delete INFO/WARNING older than N days
+        info_cutoff = datetime.utcnow() - timedelta(days=settings.log_retention_days_info)
+        await session.execute(
+            text("DELETE FROM logs WHERE level IN ('INFO', 'WARNING') AND timestamp < :cutoff"),
+            {"cutoff": info_cutoff},
+        )
+        # Delete ERROR older than M days
+        error_cutoff = datetime.utcnow() - timedelta(days=settings.log_retention_days_error)
+        await session.execute(
+            text("DELETE FROM logs WHERE level = 'ERROR' AND timestamp < :cutoff"),
+            {"cutoff": error_cutoff},
+        )
+        await session.commit()
+        log.info("logs_cleanup_done", info_cutoff=info_cutoff.isoformat(), error_cutoff=error_cutoff.isoformat())
+        await _write_log("INFO", "cleanup", "Log cleanup completed", {
+            "info_retention_days": settings.log_retention_days_info,
+            "error_retention_days": settings.log_retention_days_error,
+        })

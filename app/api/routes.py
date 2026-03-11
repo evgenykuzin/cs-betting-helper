@@ -8,7 +8,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.db.models import Match, OddsSnapshot, Signal
+from app.db.models import Match, OddsSnapshot, Signal, Log
 from app.analysis.engine import compare_odds, calc_volatility
 from app.providers.oddspapi import OddsPapiClient
 
@@ -139,3 +139,34 @@ async def trigger_poll():
     from app.tasks.polling import poll_all_matches
     poll_all_matches.delay()
     return {"status": "queued"}
+
+
+# ── Logs ─────────────────────────────────────────────────────────────
+
+@router.get("/logs")
+async def get_logs(
+    limit: int = Query(100, ge=1, le=1000),
+    level: str | None = None,
+    source: str | None = None,
+    hours: int = Query(24, ge=1, le=168),
+    db: AsyncSession = Depends(get_db),
+):
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    q = select(Log).where(Log.timestamp >= cutoff).order_by(Log.timestamp.desc())
+    if level:
+        q = q.where(Log.level == level.upper())
+    if source:
+        q = q.where(Log.source == source)
+    result = await db.execute(q.limit(limit))
+    rows = result.scalars().all()
+    return [
+        {
+            "id": l.id,
+            "timestamp": l.timestamp.isoformat(),
+            "level": l.level,
+            "source": l.source,
+            "message": l.message,
+            "meta": l.meta_json,
+        }
+        for l in rows
+    ]

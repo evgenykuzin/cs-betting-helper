@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Live Logs — CS Betting Helper{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>📊 Live Activity Logs</h3>
+    <div>
+        <button class="btn btn-sm btn-outline-success me-2"
+                hx-get="/api/logs?limit=100"
+                hx-target="#logs-container"
+                hx-swap="innerHTML">
+            🔄 Refresh
+        </button>
+        <button class="btn btn-sm btn-outline-danger"
+                hx-post="/api/poll"
+                hx-swap="none"
+                hx-on::after-request="alert('Poll queued!')">
+            🚀 Trigger Poll
+        </button>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <select class="form-select form-select-sm" hx-get="/api/logs" hx-target="#logs-container" hx-include="[name='limit'],[name='source'],[name='level'],[name='hours']" name="level">
+            <option value="">All levels</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select form-select-sm" hx-get="/api/logs" hx-target="#logs-container" hx-include="[name='limit'],[name='source'],[name='level'],[name='hours']" name="source">
+            <option value="">All sources</option>
+            <option value="polling">Polling</option>
+            <option value="telegram">Telegram</option>
+            <option value="analysis">Analysis</option>
+            <option value="cleanup">Cleanup</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select form-select-sm" hx-get="/api/logs" hx-target="#logs-container" hx-include="[name='limit'],[name='source'],[name='level'],[name='hours']" name="hours">
+            <option value="1">Last 1 hour</option>
+            <option value="6" selected>Last 6 hours</option>
+            <option value="24">Last 24 hours</option>
+            <option value="168">Last week</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select form-select-sm" hx-get="/api/logs" hx-target="#logs-container" hx-include="[name='limit'],[name='source'],[name='level'],[name='hours']" name="limit">
+            <option value="50">50 entries</option>
+            <option value="100" selected>100 entries</option>
+            <option value="200">200 entries</option>
+        </select>
+    </div>
+</div>
+
+<div id="logs-container" hx-get="/api/logs?limit=100" hx-trigger="load, every 5s"></div>
+
+<script>
+document.addEventListener('htmx:afterSwap', function(e) {
+    if (e.target.id === 'logs-container') {
+        // Auto-scroll to top
+        e.target.scrollTop = 0;
+    }
+});
+</script>
+{% endblock %}

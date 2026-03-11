@@ -78,3 +78,19 @@ class Signal(Base):
     __table_args__ = (
         Index("ix_signals_kind_detected", "kind", "detected_at"),
     )
+
+
+class Log(Base):
+    """App activity logs."""
+    __tablename__ = "logs"
+
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    level = Column(String(20))  # INFO, WARNING, ERROR
+    source = Column(String(50))  # polling, api, telegram, analysis
+    message = Column(Text, nullable=False)
+    meta_json = Column(Text)  # extra context
+
+    __table_args__ = (
+        Index("ix_logs_timestamp", "timestamp"),
+    )

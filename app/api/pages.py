@@ -61,3 +61,9 @@ async def match_detail(request: Request, match_id: int, db: AsyncSession = Depen
     return templates.TemplateResponse("match.html", {
         "request": request, "match": match, "signals": signals,
     })
+
+
+@router.get("/logs")
+async def logs_page(request: Request):
+    """Live logs page."""
+    return templates.TemplateResponse("logs.html", {"request": request})

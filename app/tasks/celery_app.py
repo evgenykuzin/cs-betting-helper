@@ -14,6 +14,9 @@ celery = Celery(
     backend=settings.celery_result_backend,
 )
 
+# Autodiscover all tasks in app.tasks package
+celery.autodiscover_tasks(["app.tasks"])
+
 celery.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -34,5 +37,9 @@ celery.conf.beat_schedule = {
     "cleanup-old-snapshots-daily": {
         "task": "app.tasks.polling.cleanup_old_data",
         "schedule": crontab(hour=3, minute=0),  # 03:00 UTC
+    },
+    "cleanup-old-logs-daily": {
+        "task": "app.tasks.polling.cleanup_old_logs",
+        "schedule": crontab(hour=4, minute=0),  # 04:00 UTC
     },
 }
