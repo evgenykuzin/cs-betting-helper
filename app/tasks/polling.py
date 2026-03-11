@@ -54,7 +54,12 @@ def poll_all_matches():
 
 
 async def _poll_all_matches_async():
+    from app.db.session import init_db
     settings = get_settings()
+    
+    # Ensure DB tables exist
+    await init_db()
+    
     client = OddsPapiClient()
     factory = get_session_factory()
 
