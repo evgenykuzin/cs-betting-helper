@@ -14,8 +14,8 @@ celery = Celery(
     backend=settings.celery_result_backend,
 )
 
-# Autodiscover all tasks in app.tasks package
-celery.autodiscover_tasks(["app.tasks"])
+# Import all task modules to register them
+from app.tasks import polling  # noqa: E402, F401
 
 celery.conf.update(
     task_serializer="json",
