@@ -13,7 +13,6 @@ services:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cs_user -d cs_betting"]
@@ -36,7 +35,7 @@ services:
   web:
     build: .
     container_name: cs-betting-web
-    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
     env_file: .env
@@ -56,7 +55,7 @@ services:
   worker:
     build: .
     container_name: cs-betting-worker
-    command: celery -A app.tasks.celery_app:celery worker --loglevel=info --concurrency=4
+    command: sh -c "alembic upgrade head && celery -A app.tasks.celery_app:celery worker --loglevel=info --concurrency=4"
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://cs_user:cs_password@postgres:5432/cs_betting
@@ -74,7 +73,7 @@ services:
   beat:
     build: .
     container_name: cs-betting-beat
-    command: celery -A app.tasks.celery_app:celery beat --loglevel=info
+    command: sh -c "alembic upgrade head && celery -A app.tasks.celery_app:celery beat --loglevel=info"
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://cs_user:cs_password@postgres:5432/cs_betting

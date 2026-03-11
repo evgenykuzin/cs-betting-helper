@@ -4,7 +4,6 @@ Async SQLAlchemy session factory.
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.core.config import get_settings
-from app.db.models import Base
 
 _engine = None
 _session_factory = None
@@ -23,14 +22,6 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     if _session_factory is None:
         _session_factory = async_sessionmaker(get_engine(), expire_on_commit=False)
     return _session_factory
-
-
-async def init_db():
-    """Create all tables from ORM models (idempotent)."""
-    engine = get_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    await engine.dispose()
 
 
 async def get_db() -> AsyncSession:
