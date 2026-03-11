@@ -14,9 +14,6 @@ celery = Celery(
     backend=settings.celery_result_backend,
 )
 
-# Import all task modules to register them
-from app.tasks import polling  # noqa: E402, F401
-
 celery.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -26,6 +23,7 @@ celery.conf.update(
     worker_concurrency=4,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    include=["app.tasks.polling"],  # Register tasks from polling module
 )
 
 # ── Beat schedule (periodic tasks) ──
