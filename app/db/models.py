@@ -18,7 +18,7 @@ class Base(DeclarativeBase):
 class Match(Base):
     __tablename__ = "matches"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     external_id = Column(String(255), unique=True, nullable=False, index=True)
     sport = Column(String(50), nullable=False, server_default="cs2")
     tournament = Column(String(255))
@@ -37,7 +37,7 @@ class OddsSnapshot(Base):
     """One row = one bookmaker's odds at one point in time (timeseries)."""
     __tablename__ = "odds_snapshots"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(Integer, ForeignKey("matches.id", ondelete="CASCADE"), nullable=False)
     bookmaker = Column(String(100), nullable=False)
     team1_odds = Column(Float, nullable=False)
@@ -62,7 +62,7 @@ class Signal(Base):
     """
     __tablename__ = "signals"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(Integer, ForeignKey("matches.id", ondelete="CASCADE"), nullable=False)
     kind = Column(String(50), nullable=False, index=True)
     severity = Column(String(20), nullable=False, server_default="info")
@@ -83,7 +83,7 @@ class Log(Base):
     """Activity logs for debugging and monitoring."""
     __tablename__ = "logs"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
     level = Column(String(20), nullable=False)
     source = Column(String(50), nullable=False)
