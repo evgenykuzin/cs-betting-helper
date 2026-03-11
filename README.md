@@ -218,6 +218,6 @@ MIT License
 
 ## 📞 Контакты
 
-Telegram: [@your_username]
+Telegram: [@amywrenfanboy]
 
 **Built with ❤️ for CS2 betting enthusiasts**
