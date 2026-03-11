@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — CS Betting Helper{% endblock %}
+
+{% block content %}
+<!-- Stats cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card bg-dark border-secondary">
+            <div class="card-body text-center">
+                <h2 class="text-primary">{{ stats.total_matches }}</h2>
+                <p class="text-muted mb-0">Matches Tracked</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card bg-dark border-secondary">
+            <div class="card-body text-center">
+                <h2 class="text-warning">{{ stats.total_signals }}</h2>
+                <p class="text-muted mb-0">Signals Detected</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card bg-dark border-secondary">
+            <div class="card-body text-center">
+                <h2 class="text-danger">{{ stats.critical_signals }}</h2>
+                <p class="text-muted mb-0">Critical Alerts</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Recent signals -->
+    <div class="col-lg-6">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0">⚡ Recent Signals</h5>
+                <span class="badge bg-secondary">Last 20</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for sig in signals %}
+                    <div class="list-group-item bg-dark signal-{{ sig.severity }}">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %} me-2">
+                                    {{ sig.kind | replace("_", " ") | title }}
+                                </span>
+                                <small>{{ sig.title }}</small>
+                            </div>
+                            <small class="text-muted">{{ sig.detected_at.strftime('%H:%M') }}</small>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item bg-dark text-muted text-center py-4">
+                        No signals yet. Start polling to detect opportunities!
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent matches -->
+    <div class="col-lg-6">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0">🎮 Upcoming Matches</h5>
+                <span class="badge bg-secondary">CS2</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Match</th>
+                                <th>Tournament</th>
+                                <th>Time</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in matches %}
+                            <tr>
+                                <td>{{ m.team1_name }} vs {{ m.team2_name }}</td>
+                                <td><small class="text-muted">{{ m.tournament }}</small></td>
+                                <td><small>{{ m.start_time.strftime('%m-%d %H:%M') }}</small></td>
+                                <td><a href="/match/{{ m.id }}" class="btn btn-sm btn-outline-primary">View</a></td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-muted text-center py-4">No matches yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

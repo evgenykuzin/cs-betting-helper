@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ match.team1_name }} vs {{ match.team2_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h3>{{ match.team1_name }} vs {{ match.team2_name }}</h3>
+    <p class="text-muted">🏆 {{ match.tournament }} · ⏰ {{ match.start_time.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+</div>
+
+<div class="row">
+    <!-- Odds comparison (loaded via HTMX) -->
+    <div class="col-lg-8">
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-header"><h5 class="mb-0">📊 Odds Comparison</h5></div>
+            <div class="card-body"
+                 hx-get="/api/matches/{{ match.id }}/odds"
+                 hx-trigger="load"
+                 hx-swap="innerHTML"
+                 id="odds-table">
+                <div class="text-center text-muted py-3">Loading odds...</div>
+            </div>
+        </div>
+
+        <!-- Odds history chart -->
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-header"><h5 class="mb-0">📈 Line Movement</h5></div>
+            <div class="card-body">
+                <canvas id="oddsChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signals sidebar -->
+    <div class="col-lg-4">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header"><h5 class="mb-0">⚡ Signals</h5></div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for sig in signals %}
+                    <div class="list-group-item bg-dark signal-{{ sig.severity }}">
+                        <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %}">
+                            {{ sig.kind | replace("_", " ") | title }}
+                        </span>
+                        <br><small>{{ sig.title }}</small>
+                        <br><small class="text-muted">{{ sig.detected_at.strftime('%m-%d %H:%M') }}</small>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item bg-dark text-muted text-center py-3">No signals</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Fetch history and render chart
+fetch('/api/matches/{{ match.id }}/history')
+    .then(r => r.json())
+    .then(data => {
+        const bookmakers = [...new Set(data.map(d => d.bookmaker))];
+        const datasets = bookmakers.slice(0, 5).map((bk, i) => {
+            const color = ['#0dcaf0','#ffc107','#dc3545','#00ff88','#6f42c1'][i % 5];
+            const points = data.filter(d => d.bookmaker === bk);
+            return {
+                label: bk,
+                data: points.map(p => ({x: p.timestamp, y: p.team1_odds})),
+                borderColor: color,
+                tension: 0.3,
+                pointRadius: 2,
+            };
+        });
+        new Chart(document.getElementById('oddsChart'), {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { type: 'time', time: { unit: 'hour' } },
+                    y: { title: { display: true, text: 'Team 1 Odds' } }
+                },
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+{% endblock %}

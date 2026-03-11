@@ -1,0 +1,92 @@
+version: "3.8"
+
+services:
+  # ── Database ──
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: cs-betting-db
+    environment:
+      POSTGRES_USER: cs_user
+      POSTGRES_PASSWORD: cs_password
+      POSTGRES_DB: cs_betting
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cs_user -d cs_betting"]
+      interval: 5s
+      retries: 5
+
+  # ── Redis ──
+  redis:
+    image: redis:7-alpine
+    container_name: cs-betting-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── FastAPI web ──
+  web:
+    build: .
+    container_name: cs-betting-web
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cs_user:cs_password@postgres:5432/cs_betting
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Celery worker ──
+  worker:
+    build: .
+    container_name: cs-betting-worker
+    command: celery -A app.tasks.celery_app:celery worker --loglevel=info --concurrency=4
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cs_user:cs_password@postgres:5432/cs_betting
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Celery beat (scheduler) ──
+  beat:
+    build: .
+    container_name: cs-betting-beat
+    command: celery -A app.tasks.celery_app:celery beat --loglevel=info
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cs_user:cs_password@postgres:5432/cs_betting
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pg_data:
