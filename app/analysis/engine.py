@@ -11,7 +11,7 @@ market spread, best odds alert are all projections of the *same* snapshot set).
 
 import json
 import statistics
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.core.config import Settings

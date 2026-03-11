@@ -4,7 +4,7 @@ Celery tasks: periodic polling, analysis, notification.
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import structlog
 from sqlalchemy import select, text
@@ -33,15 +33,14 @@ def _run_async(coro):
 
 
 async def _write_log(level: str, source: str, message: str, meta: dict | None = None):
-    """Write log entry to database."""
+    """Write log entry to database (timestamp handled by server default)."""
     factory = get_session_factory()
     async with factory() as session:
         log_entry = Log(
-            timestamp=datetime.utcnow(),
             level=level,
             source=source,
             message=message,
-            meta_json=json.dumps(meta) if meta else None,
+            meta_json=meta,  # JSONB column, pass dict directly
         )
         session.add(log_entry)
         await session.commit()
@@ -79,7 +78,7 @@ async def _poll_all_matches_async():
 async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings):
     fixture_id = fix["fixtureId"]
 
-    # 1. Upsert match
+    # 1. Upsert match (let DB handle timestamps via server defaults)
     stmt = pg_insert(Match).values(
         external_id=fixture_id,
         sport="cs2",
@@ -90,7 +89,7 @@ async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings)
         source="oddspapi",
     ).on_conflict_do_update(
         index_elements=["external_id"],
-        set_={"tournament": fix.get("tournamentName"), "updated_at": datetime.utcnow()},
+        set_={"tournament": fix.get("tournamentName")},  # Let DB update timestamps
     ).returning(Match.id)
     result = await session.execute(stmt)
     match_id = result.scalar_one()
@@ -98,7 +97,6 @@ async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings)
     # 2. Fetch odds
     odds_data = await client.fetch_odds(fixture_id)
     bookmaker_odds = odds_data.get("bookmakerOdds", {})
-    now = datetime.utcnow()
 
     current_snapshots = []
     for bk_slug, bk_data in bookmaker_odds.items():
@@ -111,12 +109,14 @@ async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings)
 
         snap = OddsSnapshot(
             match_id=match_id, bookmaker=bk_slug,
-            team1_odds=float(t1), team2_odds=float(t2), timestamp=now,
+            team1_odds=float(t1), team2_odds=float(t2),
+            # timestamp handled by server default
         )
         session.add(snap)
         current_snapshots.append({"bookmaker": bk_slug, "team1_odds": float(t1), "team2_odds": float(t2)})
 
     # 3. Load previous snapshots (last poll cycle)
+    now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=settings.poll_interval_seconds + 60)
     prev_q = await session.execute(
         select(OddsSnapshot)
@@ -176,7 +176,8 @@ async def _cleanup_async():
     settings = get_settings()
     factory = get_session_factory()
     async with factory() as session:
-        cutoff = datetime.utcnow() - timedelta(days=settings.odds_retention_days)
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=settings.odds_retention_days)
         await session.execute(
             text("DELETE FROM odds_snapshots WHERE timestamp < :cutoff"),
             {"cutoff": cutoff},
@@ -196,14 +197,15 @@ async def _cleanup_logs_async():
     settings = get_settings()
     factory = get_session_factory()
     async with factory() as session:
+        now = datetime.now(timezone.utc)
         # Delete INFO/WARNING older than N days
-        info_cutoff = datetime.utcnow() - timedelta(days=settings.log_retention_days_info)
+        info_cutoff = now - timedelta(days=settings.log_retention_days_info)
         await session.execute(
             text("DELETE FROM logs WHERE level IN ('INFO', 'WARNING') AND timestamp < :cutoff"),
             {"cutoff": info_cutoff},
         )
         # Delete ERROR older than M days
-        error_cutoff = datetime.utcnow() - timedelta(days=settings.log_retention_days_error)
+        error_cutoff = now - timedelta(days=settings.log_retention_days_error)
         await session.execute(
             text("DELETE FROM logs WHERE level = 'ERROR' AND timestamp < :cutoff"),
             {"cutoff": error_cutoff},
