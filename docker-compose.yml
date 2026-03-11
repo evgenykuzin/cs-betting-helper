@@ -78,4 +78,18 @@ services:
     build: .
     container_name: cs-betting-beat
     command: sh -c "alembic upgrade head && celery -A app.tasks.celery_app:celery beat --loglevel=info"
-    env_file: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cs_user:cs_password@postgres:5432/cs_betting
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pg_data:
