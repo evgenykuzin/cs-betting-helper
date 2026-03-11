@@ -23,21 +23,24 @@ celery.conf.update(
     worker_concurrency=4,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
-    include=["app.tasks.polling"],  # Register tasks from polling module
+    include=["app.tasks.polling"],
 )
 
 # ── Beat schedule (periodic tasks) ──
 celery.conf.beat_schedule = {
     "poll-odds-every-5min": {
         "task": "app.tasks.polling.poll_all_matches",
-        "schedule": settings.poll_interval_seconds,  # default 300s
+        "schedule": settings.poll_interval_seconds,
     },
     "cleanup-old-snapshots-daily": {
         "task": "app.tasks.polling.cleanup_old_data",
-        "schedule": crontab(hour=3, minute=0),  # 03:00 UTC
+        "schedule": crontab(hour=3, minute=0),
     },
     "cleanup-old-logs-daily": {
         "task": "app.tasks.polling.cleanup_old_logs",
-        "schedule": crontab(hour=4, minute=0),  # 04:00 UTC
+        "schedule": crontab(hour=4, minute=0),
     },
 }
+
+# Import tasks AFTER celery config to avoid circular imports
+from app.tasks import polling  # noqa: E402, F401

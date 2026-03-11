@@ -10,7 +10,6 @@ import structlog
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from app.tasks.celery_app import celery
 from app.db.session import get_engine, get_session_factory
 from app.db.models import Match, OddsSnapshot, Signal, Log
 from app.providers.oddspapi import OddsPapiClient
@@ -19,6 +18,9 @@ from app.bot.telegram import send_signal_alert
 from app.core.config import get_settings
 
 log = structlog.get_logger()
+
+# Import celery AFTER other modules to avoid circular imports
+from app.tasks.celery_app import celery  # noqa: E402
 
 
 def _run_async(coro):
