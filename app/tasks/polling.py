@@ -77,6 +77,17 @@ async def _poll_all_matches_async():
 
 async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings):
     fixture_id = fix["fixtureId"]
+    
+    # Parse start_time from ISO string to datetime
+    start_time_str = fix.get("startTime")
+    if isinstance(start_time_str, str):
+        # Handle ISO 8601 format: "2026-03-11T18:00:00.000Z"
+        try:
+            start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            start_time = datetime.now(timezone.utc)
+    else:
+        start_time = start_time_str or datetime.now(timezone.utc)
 
     # 1. Upsert match (let DB handle timestamps via server defaults)
     stmt = pg_insert(Match).values(
@@ -85,7 +96,7 @@ async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings)
         tournament=fix.get("tournamentName", "Unknown"),
         team1_name=fix.get("participant1Name", "TBD"),
         team2_name=fix.get("participant2Name", "TBD"),
-        start_time=fix["startTime"],
+        start_time=start_time,
         source="oddspapi",
     ).on_conflict_do_update(
         index_elements=["external_id"],
