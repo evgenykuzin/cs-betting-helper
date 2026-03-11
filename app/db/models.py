@@ -70,7 +70,7 @@ class Signal(Base):
     detail = Column(Text)
     meta_json = Column(JSONB, nullable=True)  # Native PostgreSQL JSON type
     detected_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
-    notified = Column(Boolean, nullable=False, server_default=False)
+    notified = Column(Boolean, nullable=False, server_default="false")
 
     match = relationship("Match", back_populates="signals")
 
