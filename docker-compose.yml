@@ -35,7 +35,7 @@ services:
   web:
     build: .
     container_name: cs-betting-web
-    command: sh -c "alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "uvicorn app.api.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
     env_file: .env
@@ -77,7 +77,7 @@ services:
   beat:
     build: .
     container_name: cs-betting-beat
-    command: sh -c "alembic upgrade head && celery -A app.tasks.celery_app:celery beat --loglevel=info"
+    command: sh -c "celery -A app.tasks.celery_app:celery beat --loglevel=info"
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://cs_user:cs_password@postgres:5432/cs_betting
