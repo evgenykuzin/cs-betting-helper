@@ -4,6 +4,7 @@ OddsPapi REST client.
 Docs: https://oddspapi.io/blog/esports-odds-api-guide
 """
 
+import asyncio
 import httpx
 import structlog
 from datetime import datetime, timedelta
@@ -17,6 +18,10 @@ SPORT_IDS = {
     "cs2": 17, "csgo": 17, "lol": 18,
     "dota2": 16, "valorant": 61, "cod": 56, "rocketleague": 59,
 }
+
+# Retry settings for rate limiting
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 2.0  # seconds, doubles each attempt
 
 
 class OddsPapiClient:
@@ -33,9 +38,35 @@ class OddsPapiClient:
     async def _get(self, path: str, params: dict | None = None) -> Any:
         params = params or {}
         params["apiKey"] = self.api_key
-        resp = await self._client.get(f"{self.base_url}{path}", params=params)
-        resp.raise_for_status()
-        return resp.json()
+        url = f"{self.base_url}{path}"
+
+        for attempt in range(_MAX_RETRIES):
+            try:
+                resp = await self._client.get(url, params=params)
+                if resp.status_code == 429:
+                    delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                    log.warning("rate_limited", path=path, attempt=attempt + 1, retry_in=delay)
+                    if attempt < _MAX_RETRIES - 1:
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        log.error("rate_limit_exhausted", path=path)
+                        raise httpx.HTTPStatusError(
+                            f"429 Too Many Requests after {_MAX_RETRIES} retries",
+                            request=resp.request,
+                            response=resp,
+                        )
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPStatusError:
+                raise
+            except httpx.RequestError as e:
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                log.warning("request_error", path=path, error=str(e), attempt=attempt + 1, retry_in=delay)
+                if attempt < _MAX_RETRIES - 1:
+                    await asyncio.sleep(delay)
+                else:
+                    raise
 
     # ---- public ----
 

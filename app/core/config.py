@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     arbitrage_min_profit_pct: float = 1.0
     value_bet_threshold_pct: float = 5.0  # odds > market_avg by X%
     suspicious_drop_pct: float = 25.0
-    suspicious_books_moved: int = 4
+    suspicious_books_moved: int = 3
 
     # --- Retention policies (days) ---
     log_retention_days_info: int = 7    # INFO/WARNING logs

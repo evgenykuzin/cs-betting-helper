@@ -59,7 +59,13 @@ async def _poll_all_matches_async():
     factory = get_session_factory()
 
     try:
-        fixtures = await client.fetch_fixtures(sport="cs2", has_odds=True)
+        try:
+            fixtures = await client.fetch_fixtures(sport="cs2", has_odds=True)
+        except Exception as e:
+            log.error("fetch_fixtures_failed", error=str(e))
+            await _write_log("ERROR", "polling", f"fetch_fixtures failed: {e}")
+            return
+
         log.info("poll_start", fixtures=len(fixtures))
         await _write_log("INFO", "polling", f"Poll started, {len(fixtures)} fixtures")
 
@@ -67,9 +73,9 @@ async def _poll_all_matches_async():
             for fix in fixtures:
                 try:
                     await _process_fixture(fix, client, session, settings)
-                except Exception:
-                    log.exception("fixture_error", fixture_id=fix.get("fixtureId"))
-                    await _write_log("ERROR", "polling", f"Fixture error {fix.get('fixtureId')}")
+                except Exception as e:
+                    log.exception("fixture_error", fixture_id=fix.get("fixtureId"), error=str(e))
+                    await _write_log("ERROR", "polling", f"Fixture error {fix.get('fixtureId')}: {e}")
             await session.commit()
 
     finally:
@@ -106,8 +112,13 @@ async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings)
     result = await session.execute(stmt)
     match_id = result.scalar_one()
 
-    # 2. Fetch odds
-    odds_data = await client.fetch_odds(fixture_id)
+    # 2. Fetch odds (skip fixture on rate limit / error)
+    try:
+        odds_data = await client.fetch_odds(fixture_id)
+    except Exception as e:
+        log.warning("fetch_odds_failed", fixture_id=fixture_id, error=str(e))
+        await _write_log("WARNING", "polling", f"fetch_odds skipped {fixture_id}: {e}")
+        return
     bookmaker_odds = odds_data.get("bookmakerOdds", {})
 
     current_snapshots = []

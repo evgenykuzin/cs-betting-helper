@@ -142,7 +142,18 @@ def detect_steam_moves(
 
 # ─── 4. Value Bet / Sharp vs Soft ────────────────────────────────────
 
+# Books known to be sharp / take heavy action (their odds reflect real money)
 SHARP_BOOKS = {"pinnacle", "singbet", "sbobet"}
+
+# Books that are known to be mainstream / soft (usually follow the market)
+# Anything NOT in this set is treated as potentially sharp/outlier
+SOFT_BOOKS = {
+    "vave", "vbet", "betika", "betway", "betway.es", "dafabet",
+    "unibet", "unibet.dk", "unibet.ie", "unibet.ro", "unibet.se", "unibet.com.au",
+    "casumo", "leovegas", "leovegas.es", "betplay", "betrivers", "tabtouch",
+    "sportybet", "scooore.be", "bingoal.be", "rushbet.co", "stake.bet.br",
+    "betmgm.co.uk", "svenskaspel", "polymarket",
+}
 
 def detect_value_bets(snapshots: list[dict], cfg: Settings) -> list[dict]:
     """
@@ -182,39 +193,129 @@ def detect_value_bets(snapshots: list[dict], cfg: Settings) -> list[dict]:
     return signals
 
 
-# ─── 5. Consensus / Multi-book movement ─────────────────────────────
+# ─── 5. Consensus / Soft-vs-Outlier Divergence ──────────────────────
 
 def detect_consensus(
-    current: list[dict], previous: list[dict], cfg: Settings,
+    current: list[dict],
+    previous: list[dict],
+    cfg: Settings,
 ) -> list[dict]:
-    """Covers: multi_book_consensus, suspicious_match."""
+    """
+    Two-mode consensus detection:
+
+    Mode A — Snapshot divergence (no previous needed):
+        Compare soft books avg vs outlier books avg for SAME snapshot.
+        If outlier books systematically disagree with soft consensus by a
+        large margin, this indicates insider money or match-fixing pressure.
+        Example: soft books Team1 @ 1.4, but inbet/betway/lottoland @ 5.0+
+        → "Outlier books diverge from market on Team1"
+
+    Mode B — Multi-book temporal drop (requires previous):
+        If 3+ books all dropped odds on same team between cycles,
+        that's a coordinated move (steam / consensus shift).
+    """
     signals = []
-    prev_map = {s["bookmaker"]: s for s in previous}
 
-    for team_key, label in [("team1_odds", "Team 1"), ("team2_odds", "Team 2")]:
-        books_dropped = []
-        for cur in current:
-            bk = cur["bookmaker"]
-            if bk not in prev_map:
+    # ── Mode A: Snapshot-level soft vs outlier divergence ──────────────
+    # Works even on first polling cycle with no previous data.
+    if len(current) >= 4:
+        for team_key, team_label, opponent_label in [
+            ("team1_odds", "Team 1", "Team 2"),
+            ("team2_odds", "Team 2", "Team 1"),
+        ]:
+            soft_odds = [
+                s[team_key] for s in current
+                if s["bookmaker"] in SOFT_BOOKS and s[team_key] > 0
+            ]
+            outlier_odds_map = {
+                s["bookmaker"]: s[team_key]
+                for s in current
+                if s["bookmaker"] not in SOFT_BOOKS and s[team_key] > 0
+            }
+
+            if len(soft_odds) < 2 or len(outlier_odds_map) < 2:
                 continue
-            pct = _pct_change(prev_map[bk][team_key], cur[team_key])
-            if pct < -5:  # >5% drop
-                books_dropped.append(bk)
 
-        if len(books_dropped) >= cfg.suspicious_books_moved:
-            signals.append({
-                "kind": "suspicious",
-                "severity": "critical",
-                "title": f"Suspicious: {len(books_dropped)} books dropped {label}",
-                "meta": {"team": team_key, "books": books_dropped},
-            })
-        elif len(books_dropped) >= 3:
-            signals.append({
-                "kind": "consensus_move",
-                "severity": "warning",
-                "title": f"Consensus: {len(books_dropped)} books moved {label}",
-                "meta": {"team": team_key, "books": books_dropped},
-            })
+            avg_soft = statistics.mean(soft_odds)
+            if avg_soft == 0:
+                continue
+
+            # Find outlier books that diverge heavily from soft consensus
+            # A book is an "outlier" if its odds are > 2x the soft average
+            # (meaning soft books think Team1 is likely winner @ ~1.4,
+            #  but this book says Team1 is big underdog @ 5.0+)
+            divergent_books = {
+                bk: odds for bk, odds in outlier_odds_map.items()
+                if odds > avg_soft * 2.0
+            }
+
+            if len(divergent_books) >= cfg.suspicious_books_moved:
+                # Predict: team with LOW odds from outliers wins
+                # (outlier books are confident the other team wins)
+                divergent_avg = statistics.mean(divergent_books.values())
+                signals.append({
+                    "kind": "suspicious",
+                    "severity": "critical",
+                    "title": (
+                        f"Suspicious: {len(divergent_books)} books diverge on {team_label} "
+                        f"(soft avg {avg_soft:.2f} vs outliers avg {divergent_avg:.2f})"
+                    ),
+                    "meta": {
+                        "team": team_key,
+                        "prediction": opponent_label,
+                        "soft_avg": round(avg_soft, 3),
+                        "outlier_avg": round(divergent_avg, 3),
+                        "divergent_books": {bk: round(odds, 3) for bk, odds in divergent_books.items()},
+                        "soft_book_count": len(soft_odds),
+                    },
+                })
+            elif len(divergent_books) >= 2:
+                divergent_avg = statistics.mean(divergent_books.values())
+                signals.append({
+                    "kind": "consensus_move",
+                    "severity": "warning",
+                    "title": (
+                        f"Divergence: {len(divergent_books)} books disagree on {team_label} "
+                        f"(soft avg {avg_soft:.2f} vs outliers avg {divergent_avg:.2f})"
+                    ),
+                    "meta": {
+                        "team": team_key,
+                        "prediction": opponent_label,
+                        "soft_avg": round(avg_soft, 3),
+                        "outlier_avg": round(divergent_avg, 3),
+                        "divergent_books": {bk: round(odds, 3) for bk, odds in divergent_books.items()},
+                        "soft_book_count": len(soft_odds),
+                    },
+                })
+
+    # ── Mode B: Temporal multi-book drop (requires previous data) ──────
+    if previous:
+        prev_map = {s["bookmaker"]: s for s in previous}
+        for team_key, label in [("team1_odds", "Team 1"), ("team2_odds", "Team 2")]:
+            books_dropped = []
+            for cur in current:
+                bk = cur["bookmaker"]
+                if bk not in prev_map:
+                    continue
+                pct = _pct_change(prev_map[bk][team_key], cur[team_key])
+                if pct < -5:  # >5% drop since last cycle
+                    books_dropped.append(bk)
+
+            if len(books_dropped) >= cfg.suspicious_books_moved:
+                signals.append({
+                    "kind": "suspicious",
+                    "severity": "critical",
+                    "title": f"Steam: {len(books_dropped)} books dropped {label} this cycle",
+                    "meta": {"team": team_key, "books": books_dropped, "mode": "temporal"},
+                })
+            elif len(books_dropped) >= 3:
+                signals.append({
+                    "kind": "consensus_move",
+                    "severity": "warning",
+                    "title": f"Consensus move: {len(books_dropped)} books dropped {label}",
+                    "meta": {"team": team_key, "books": books_dropped, "mode": "temporal"},
+                })
+
     return signals
 
 
@@ -268,9 +369,9 @@ def run_all(
 
     signals.extend(detect_arbitrage(current_snapshots, cfg))
     signals.extend(detect_value_bets(current_snapshots, cfg))
-
-    if previous_snapshots:
-        signals.extend(detect_steam_moves(current_snapshots, previous_snapshots, cfg))
-        signals.extend(detect_consensus(current_snapshots, previous_snapshots, cfg))
+    signals.extend(detect_steam_moves(current_snapshots, previous_snapshots, cfg))
+    # detect_consensus runs always: Mode A works without previous data,
+    # Mode B activates automatically when previous_snapshots are available
+    signals.extend(detect_consensus(current_snapshots, previous_snapshots, cfg))
 
     return signals
