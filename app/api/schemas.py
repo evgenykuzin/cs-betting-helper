@@ -77,3 +77,52 @@ class OddsComparisonResponse(BaseModel):
     spread_team1: float
     spread_team2: float
     bookmaker_count: int
+
+
+# ─────────────────────────────────────────────────────────
+# Admin Schemas
+# ─────────────────────────────────────────────────────────
+
+class SignalConfigResponse(BaseModel):
+    id: int
+    kind: str
+    severity: str
+    enabled: bool
+    send_telegram: bool
+    description: Optional[str] = None
+    config_json: Optional[Any] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SignalConfigUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    send_telegram: Optional[bool] = None
+    description: Optional[str] = None
+    config_json: Optional[dict] = None
+
+
+class AdminConfigResponse(BaseModel):
+    id: int
+    key: str
+    value: Any
+    category: Optional[str]
+    description: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class AdminConfigUpdate(BaseModel):
+    value: Any
+    category: Optional[str] = None
+    description: Optional[str] = None
+
+
+class AdminConfigCreate(BaseModel):
+    value: Any
+    category: Optional[str] = "general"
+    description: Optional[str] = None
+
+
