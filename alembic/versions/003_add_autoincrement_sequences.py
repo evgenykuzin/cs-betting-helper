@@ -1,15 +1,15 @@
-"""003: Add AUTOINCREMENT sequences to id columns
+"""Add AUTOINCREMENT sequences to id columns
 
-Revision ID: 003
-Revises: 002
+Revision ID: 003_add_autoincrement_sequences
+Revises: None
 Create Date: 2026-03-12 00:10:00.000000
 
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "003"
-down_revision = "002"
+revision = "003_add_autoincrement_sequences"
+down_revision = None
 branch_labels = None
 depends_on = None
 
