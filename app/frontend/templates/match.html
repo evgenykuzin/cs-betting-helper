@@ -39,29 +39,31 @@
             <div class="card-header">
                 <h5 class="mb-0">⚡ Match Signals</h5>
             </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush" id="signals-container">
-                    {% if signals %}
-                        {% for sig in signals %}
-                        <div class="list-group-item bg-dark signal-{{ sig.severity }} p-2">
-                            <div>
-                                <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %} me-2">
-                                    {{ sig.kind | replace("_", " ") | title }}
-                                </span>
-                            </div>
-                            <small class="d-block mt-1">{{ sig.title }}</small>
-                            {% if sig.meta_json %}
-                            <small class="text-muted d-block mt-1"><pre style="font-size: 0.7rem; margin: 0;">{{ sig.meta_json }}</pre></small>
-                            {% endif %}
-                            <small class="text-muted d-block mt-1">{{ sig.detected_at.strftime('%m-%d %H:%M') }}</small>
+            <div class="card-body p-0" id="signals-container">
+                {% if signals %}
+                    {% for sig in signals %}
+                    <div class="list-group-item bg-dark signal-{{ sig.severity }} p-3 border-bottom border-secondary">
+                        <div class="mb-2">
+                            <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %} me-2">
+                                {{ sig.kind | replace("_", " ") | title }}
+                            </span>
+                            <small class="text-muted">{{ sig.detected_at.strftime('%m-%d %H:%M') }}</small>
                         </div>
-                        {% endfor %}
-                    {% else %}
-                    <div class="list-group-item bg-dark text-muted text-center py-4">
-                        No signals detected yet
+                        <small class="d-block">{{ sig.title }}</small>
+                        {% if sig.meta_json %}
+                        <div class="mt-2 p-2 bg-dark rounded border border-opacity-25" style="border-color: inherit;">
+                            <small class="text-muted" id="meta-{{ sig.id }}">
+                                <pre style="font-size: 0.75rem; margin: 0; color: inherit;">{{ sig.meta_json }}</pre>
+                            </small>
+                        </div>
+                        {% endif %}
                     </div>
-                    {% endif %}
+                    {% endfor %}
+                {% else %}
+                <div class="list-group-item bg-dark text-muted text-center py-4">
+                    No signals detected yet
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -83,18 +85,29 @@ async function loadOdds() {
             return;
         }
 
-        let html = '<table class="table table-dark table-hover mb-0"><thead><tr><th>Bookmaker</th><th>Team 1</th><th>Team 2</th></tr></thead><tbody>';
+        const match = document.querySelector('h3').textContent;
+        const [team1, team2] = match.split(' vs ').map(t => t.trim());
         
-        const bk1 = data.comparison.best_team1;
-        const bk2 = data.comparison.best_team2;
+        let html = `<table class="table table-dark table-hover mb-0">
+            <thead class="table-secondary">
+                <tr>
+                    <th>Bookmaker</th>
+                    <th class="text-center">${team1}</th>
+                    <th class="text-center">${team2}</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        
+        const bk1 = data.comparison.best_team1 || {};
+        const bk2 = data.comparison.best_team2 || {};
         
         data.snapshots.forEach(snap => {
-            const t1Best = snap.bookmaker === bk1.bookmaker ? '⭐' : '';
-            const t2Best = snap.bookmaker === bk2.bookmaker ? '⭐' : '';
+            const t1Best = snap.bookmaker === bk1.bookmaker ? ' ⭐' : '';
+            const t2Best = snap.bookmaker === bk2.bookmaker ? ' ⭐' : '';
             html += `<tr>
-                <td><strong>${snap.bookmaker}</strong></td>
-                <td class="text-info">${snap.team1_odds.toFixed(3)} ${t1Best}</td>
-                <td class="text-info">${snap.team2_odds.toFixed(3)} ${t2Best}</td>
+                <td><span class="badge bg-secondary">${snap.bookmaker}</span></td>
+                <td class="text-center text-info"><strong>${snap.team1_odds.toFixed(3)}${t1Best}</strong></td>
+                <td class="text-center text-info"><strong>${snap.team2_odds.toFixed(3)}${t2Best}</strong></td>
             </tr>`;
         });
         

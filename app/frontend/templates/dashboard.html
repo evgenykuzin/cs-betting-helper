@@ -161,6 +161,103 @@ async function loadSignalsByType(kind) {
     await loadSignals();
 }
 
+async function formatSignalMeta(sig) {
+    // Parse meta_json if it's a string
+    let meta = {};
+    try {
+        if (typeof sig.meta === 'string') {
+            meta = JSON.parse(sig.meta);
+        } else if (typeof sig.meta === 'object') {
+            meta = sig.meta;
+        }
+    } catch (e) {
+        console.warn('Failed to parse meta:', sig.meta);
+    }
+
+    const descriptions = {
+        arbitrage: '💼 Profitable opportunity across different bookmakers',
+        steam_move: '🔥 Sudden odds movement - potential insider pressure',
+        value_bet: '💎 Soft book offering better odds than sharp books',
+        suspicious: '⚠️ Multiple books collapsed odds - high match-fixing risk',
+        consensus_move: '📊 Market consensus shift - coordinate movement',
+        underdog_drop: '📉 Underdog odds collapsing rapidly',
+    };
+
+    const desc = descriptions[sig.kind] || 'Signal detected';
+
+    let metaHtml = `<div class="text-muted small mt-2">${desc}</div>`;
+    
+    if (Object.keys(meta).length > 0) {
+        if (sig.kind === 'arbitrage') {
+            const profit = meta.profit_pct ? parseFloat(meta.profit_pct).toFixed(2) : '?';
+            const bk1 = meta.bk1 || 'BK1';
+            const odds1 = meta.odds1 ? parseFloat(meta.odds1).toFixed(3) : '?';
+            const stake1 = meta.stake1 ? parseFloat(meta.stake1).toFixed(2) : '?';
+            const bk2 = meta.bk2 || 'BK2';
+            const odds2 = meta.odds2 ? parseFloat(meta.odds2).toFixed(3) : '?';
+            const stake2 = meta.stake2 ? parseFloat(meta.stake2).toFixed(2) : '?';
+            
+            metaHtml = `
+                <div class="mt-2 p-2 bg-dark rounded border border-warning border-opacity-50">
+                    <div class="small text-warning">💰 Profit: <strong>${profit}%</strong></div>
+                    <div class="small mt-1">
+                        <span class="badge bg-secondary">${bk1}</span> 
+                        @ <strong>${odds1}</strong> (stake $${stake1})
+                    </div>
+                    <div class="small mt-1">
+                        <span class="badge bg-secondary">${bk2}</span> 
+                        @ <strong>${odds2}</strong> (stake $${stake2})
+                    </div>
+                </div>
+            `;
+        } else if (sig.kind === 'value_bet') {
+            const bk = meta.bookmaker || 'Bookmaker';
+            const odds = meta.odds ? parseFloat(meta.odds).toFixed(3) : '?';
+            const sharpAvg = meta.sharp_avg ? parseFloat(meta.sharp_avg).toFixed(3) : '?';
+            const diffPct = meta.diff_pct ? parseFloat(meta.diff_pct).toFixed(1) : '?';
+            
+            metaHtml = `
+                <div class="mt-2 p-2 bg-dark rounded border border-info border-opacity-50">
+                    <div class="small"><span class="badge bg-secondary">${bk}</span> offers premium</div>
+                    <div class="small mt-1">Soft: <strong>${odds}</strong> vs Sharp: <strong>${sharpAvg}</strong></div>
+                    <div class="small text-info mt-1">📈 +${diffPct}% edge</div>
+                </div>
+            `;
+        } else if (sig.kind === 'steam_move') {
+            const oldOdds = meta.old ? parseFloat(meta.old).toFixed(3) : '?';
+            const newOdds = meta.new ? parseFloat(meta.new).toFixed(3) : '?';
+            const pct = meta.pct ? parseFloat(meta.pct).toFixed(1) : '?';
+            const bk = meta.bookmaker || 'Bookmaker';
+            
+            metaHtml = `
+                <div class="mt-2 p-2 bg-dark rounded border border-danger border-opacity-50">
+                    <div class="small"><span class="badge bg-secondary">${bk}</span></div>
+                    <div class="small mt-1">${oldOdds} <strong>→</strong> ${newOdds}</div>
+                    <div class="small text-danger mt-1">📊 ${pct > 0 ? '+' : ''}${pct}% change</div>
+                </div>
+            `;
+        } else if (sig.kind === 'suspicious') {
+            const books = meta.books ? meta.books.join(', ') : 'Multiple books';
+            metaHtml = `
+                <div class="mt-2 p-2 bg-dark rounded border border-danger border-opacity-75">
+                    <div class="small text-danger">🚨 Books involved:</div>
+                    <div class="small mt-1">${books}</div>
+                </div>
+            `;
+        } else if (sig.kind === 'consensus_move') {
+            const books = meta.books ? meta.books.join(', ') : 'Multiple books';
+            metaHtml = `
+                <div class="mt-2 p-2 bg-dark rounded border border-warning border-opacity-50">
+                    <div class="small">Consensus from:</div>
+                    <div class="small mt-1">${books}</div>
+                </div>
+            `;
+        }
+    }
+
+    return metaHtml;
+}
+
 async function loadSignals() {
     try {
         let url = `/api/signals?page=${currentPage}&limit=50`;
@@ -173,51 +270,28 @@ async function loadSignals() {
         if (data.signals.length === 0) {
             html = '<div class="text-muted text-center py-4">No signals found</div>';
         } else {
-            data.signals.forEach(sig => {
+            for (const sig of data.signals) {
                 const severityColor = sig.severity === 'critical' ? 'danger' : 
                                     sig.severity === 'warning' ? 'warning text-dark' : 'info';
+                const metaHtml = await formatSignalMeta(sig);
                 
-                // Format meta nicely based on signal type
-                let metaHtml = '';
-                if (sig.meta && Object.keys(sig.meta).length > 0) {
-                    if (sig.kind === 'arbitrage') {
-                        const m = sig.meta;
-                        metaHtml = `<small class="d-block mt-1 text-warning">
-                            💰 ${m.profit_pct?.toFixed(2)}% | ${m.bk1} @ ${m.odds1?.toFixed(3)} (\$${m.stake1}) vs ${m.bk2} @ ${m.odds2?.toFixed(3)} (\$${m.stake2})
-                        </small>`;
-                    } else if (sig.kind === 'value_bet') {
-                        const m = sig.meta;
-                        metaHtml = `<small class="d-block mt-1 text-info">
-                            📊 ${m.odds?.toFixed(3)} vs sharp ${m.sharp_avg?.toFixed(3)} (+${m.diff_pct?.toFixed(1)}%)
-                        </small>`;
-                    } else if (sig.kind === 'steam_move') {
-                        const m = sig.meta;
-                        metaHtml = `<small class="d-block mt-1 text-warning">
-                            📉 ${m.old?.toFixed(3)} → ${m.new?.toFixed(3)} (${m.pct > 0 ? '+' : ''}${m.pct?.toFixed(1)}%)
-                        </small>`;
-                    } else if (sig.kind === 'suspicious' || sig.kind === 'consensus_move') {
-                        const m = sig.meta;
-                        metaHtml = `<small class="d-block mt-1 text-info">
-                            📌 ${m.books?.join(', ')}
-                        </small>`;
-                    }
-                }
+                const kindLabel = sig.kind.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                 
                 html += `
-                    <div class="list-group-item bg-dark signal-${sig.severity} p-2">
-                        <div class="d-flex justify-content-between">
+                    <div class="list-group-item bg-dark signal-${sig.severity} p-3 mb-2 rounded border border-${sig.severity === 'critical' ? 'danger' : sig.severity === 'warning' ? 'warning' : 'info'} border-opacity-25">
+                        <div class="d-flex justify-content-between align-items-start">
                             <div style="flex: 1;">
-                                <span class="badge bg-${severityColor} me-2">
-                                    ${sig.kind.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                                </span>
-                                <small>${sig.title}</small>
+                                <div>
+                                    <span class="badge bg-${severityColor} me-2">${kindLabel}</span>
+                                    <span class="text-muted small">${new Date(sig.detected_at).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})}</span>
+                                </div>
+                                <div class="mt-2 small">${sig.title}</div>
                                 ${metaHtml}
                             </div>
-                            <small class="text-muted" style="white-space: nowrap;">${new Date(sig.detected_at).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})}</small>
                         </div>
                     </div>
                 `;
-            });
+            }
         }
         document.getElementById('signals-list').innerHTML = html;
         
