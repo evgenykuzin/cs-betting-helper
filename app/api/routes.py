@@ -19,8 +19,8 @@ router = APIRouter()
 
 @router.get("/matches")
 async def list_matches(
-    days: int = Query(7, ge=1, le=30),
-    db: AsyncSession = Depends(get_db),
+        days: int = Query(7, ge=1, le=30),
+        db: AsyncSession = Depends(get_db),
 ):
     cutoff = datetime.utcnow() - timedelta(days=days)
     q = await db.execute(
@@ -60,12 +60,13 @@ async def match_odds(match_id: int, db: AsyncSession = Depends(get_db)):
             select(OddsSnapshot).join(sq, OddsSnapshot.id == sq.c.max_id)
         )
         rows = q.scalars().all()
-        
+
         if not rows:
             return {"snapshots": [], "comparison": {}, "status": "no_data"}
-        
+
         snapshots = [
-            {"bookmaker": r.bookmaker, "team1_odds": r.team1_odds, "team2_odds": r.team2_odds, "timestamp": r.timestamp.isoformat()}
+            {"bookmaker": r.bookmaker, "team1_odds": r.team1_odds, "team2_odds": r.team2_odds,
+             "timestamp": r.timestamp.isoformat()}
             for r in rows
         ]
         comparison = compare_odds(snapshots)
@@ -79,9 +80,9 @@ async def match_odds(match_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/matches/{match_id}/history")
 async def match_odds_history(
-    match_id: int,
-    bookmaker: str | None = None,
-    db: AsyncSession = Depends(get_db),
+        match_id: int,
+        bookmaker: str | None = None,
+        db: AsyncSession = Depends(get_db),
 ):
     q = select(OddsSnapshot).where(OddsSnapshot.match_id == match_id)
     if bookmaker:
@@ -99,46 +100,74 @@ async def match_odds_history(
     ]
 
 
+# ── Odds List ────────────────────────────────────────
+
+@router.get("/odds")
+async def odds_list(
+        bookmaker: str | None = None,
+        db: AsyncSession = Depends(get_db),
+):
+    q = select(OddsSnapshot)
+    if bookmaker:
+        q = q.where(OddsSnapshot.bookmaker == bookmaker)
+    q = q.order_by(OddsSnapshot.timestamp)
+    result = await db.execute(q.limit(2000))
+    rows = result.scalars().all()
+    return [
+        {
+            "bookmaker": r.bookmaker,
+            "team1_odds": r.team1_odds,
+            "team2_odds": r.team2_odds,
+            "map1_team1_odds": r.map1_team1_odds,
+            "map1_team2_odds": r.map1_team2_odds,
+            "total_maps_over": r.total_maps_over,
+            "total_maps_under": r.total_maps_under,
+            "timestamp": r.timestamp.isoformat(),
+        }
+        for r in rows
+    ]
+
+
 # ── Signals ──────────────────────────────────────────────────────────
 
 @router.get("/signals")
 async def list_signals(
-    kind: str | None = None,
-    severity: str | None = None,
-    page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
+        kind: str | None = None,
+        severity: str | None = None,
+        page: int = Query(1, ge=1),
+        limit: int = Query(50, ge=1, le=200),
+        db: AsyncSession = Depends(get_db),
 ):
     """List signals with pagination, filtering, and match context."""
     # Initialize defaults if needed
     from app.services.config_service import SignalConfigService
     await SignalConfigService.get_or_create_default(db)
-    
+
     offset = (page - 1) * limit
     q = select(Signal).order_by(Signal.detected_at.desc())
-    
+
     if kind:
         q = q.where(Signal.kind == kind)
     if severity:
         q = q.where(Signal.severity == severity)
-    
+
     # Get total count
     count_result = await db.execute(select(func.count(Signal.id)).where(
         (Signal.kind == kind if kind else True) and
         (Signal.severity == severity if severity else True)
     ))
     total = count_result.scalar() or 0
-    
+
     result = await db.execute(q.offset(offset).limit(limit))
     rows = result.scalars().all()
-    
+
     # Enrich signals with match data
     signals_with_match = []
     for s in rows:
         # Get match info
         match_result = await db.execute(select(Match).where(Match.id == s.match_id))
         match = match_result.scalar_one_or_none()
-        
+
         signals_with_match.append({
             "id": s.id,
             "match_id": s.match_id,
@@ -154,7 +183,7 @@ async def list_signals(
                 "start_time": match.start_time.isoformat() if match else None,
             } if match else None,
         })
-    
+
     return {
         "pagination": {
             "page": page,
@@ -194,11 +223,11 @@ async def trigger_poll():
 
 @router.get("/logs")
 async def get_logs(
-    limit: int = Query(100, ge=1, le=1000),
-    level: str | None = None,
-    source: str | None = None,
-    hours: int = Query(24, ge=1, le=168),
-    db: AsyncSession = Depends(get_db),
+        limit: int = Query(100, ge=1, le=1000),
+        level: str | None = None,
+        source: str | None = None,
+        hours: int = Query(24, ge=1, le=168),
+        db: AsyncSession = Depends(get_db),
 ):
     cutoff = datetime.utcnow() - timedelta(hours=hours)
     q = select(Log).where(Log.timestamp >= cutoff).order_by(Log.timestamp.desc())
