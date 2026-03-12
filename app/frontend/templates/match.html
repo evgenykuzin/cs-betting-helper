@@ -3,86 +3,181 @@
 
 {% block content %}
 <div class="mb-4">
-    <h3>{{ match.team1_name }} vs {{ match.team2_name }}</h3>
+    <h3>{{ match.team1_name }} <span class="text-muted">vs</span> {{ match.team2_name }}</h3>
     <p class="text-muted">🏆 {{ match.tournament }} · ⏰ {{ match.start_time.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+    <a href="/" class="btn btn-sm btn-outline-secondary">← Back</a>
 </div>
 
 <div class="row">
-    <!-- Odds comparison (loaded via HTMX) -->
+    <!-- Odds Comparison Table -->
     <div class="col-lg-8">
         <div class="card bg-dark border-secondary mb-4">
-            <div class="card-header"><h5 class="mb-0">📊 Odds Comparison</h5></div>
-            <div class="card-body"
-                 hx-get="/api/matches/{{ match.id }}/odds"
-                 hx-trigger="load"
-                 hx-swap="innerHTML"
-                 id="odds-table">
-                <div class="text-center text-muted py-3">Loading odds...</div>
+            <div class="card-header">
+                <h5 class="mb-0">📊 Line Shopping (Latest Odds)</h5>
+            </div>
+            <div class="card-body p-0">
+                <div id="odds-container" class="table-responsive">
+                    <div class="text-center text-muted py-4">Loading odds...</div>
+                </div>
             </div>
         </div>
 
-        <!-- Odds history chart -->
+        <!-- Odds History Chart -->
         <div class="card bg-dark border-secondary mb-4">
-            <div class="card-header"><h5 class="mb-0">📈 Line Movement</h5></div>
+            <div class="card-header">
+                <h5 class="mb-0">📈 Line Movement (Team 1)</h5>
+            </div>
             <div class="card-body">
                 <canvas id="oddsChart" height="250"></canvas>
             </div>
         </div>
     </div>
 
-    <!-- Signals sidebar -->
+    <!-- Signals Sidebar -->
     <div class="col-lg-4">
         <div class="card bg-dark border-secondary">
-            <div class="card-header"><h5 class="mb-0">⚡ Signals</h5></div>
+            <div class="card-header">
+                <h5 class="mb-0">⚡ Match Signals</h5>
+            </div>
             <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    {% for sig in signals %}
-                    <div class="list-group-item bg-dark signal-{{ sig.severity }}">
-                        <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %}">
-                            {{ sig.kind | replace("_", " ") | title }}
-                        </span>
-                        <br><small>{{ sig.title }}</small>
-                        <br><small class="text-muted">{{ sig.detected_at.strftime('%m-%d %H:%M') }}</small>
-                    </div>
+                <div class="list-group list-group-flush" id="signals-container">
+                    {% if signals %}
+                        {% for sig in signals %}
+                        <div class="list-group-item bg-dark signal-{{ sig.severity }} p-2">
+                            <div>
+                                <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %} me-2">
+                                    {{ sig.kind | replace("_", " ") | title }}
+                                </span>
+                            </div>
+                            <small class="d-block mt-1">{{ sig.title }}</small>
+                            {% if sig.meta_json %}
+                            <small class="text-muted d-block mt-1"><pre style="font-size: 0.7rem; margin: 0;">{{ sig.meta_json }}</pre></small>
+                            {% endif %}
+                            <small class="text-muted d-block mt-1">{{ sig.detected_at.strftime('%m-%d %H:%M') }}</small>
+                        </div>
+                        {% endfor %}
                     {% else %}
-                    <div class="list-group-item bg-dark text-muted text-center py-3">No signals</div>
-                    {% endfor %}
+                    <div class="list-group-item bg-dark text-muted text-center py-4">
+                        No signals detected yet
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+
 <script>
-// Fetch history and render chart
-fetch('/api/matches/{{ match.id }}/history')
-    .then(r => r.json())
-    .then(data => {
+// Load odds table
+async function loadOdds() {
+    try {
+        const res = await fetch('/api/matches/{{ match.id }}/odds');
+        const data = await res.json();
+        
+        if (!data.snapshots || data.snapshots.length === 0) {
+            document.getElementById('odds-container').innerHTML = 
+                '<div class="alert alert-info m-3">No odds data available yet</div>';
+            return;
+        }
+
+        let html = '<table class="table table-dark table-hover mb-0"><thead><tr><th>Bookmaker</th><th>Team 1</th><th>Team 2</th></tr></thead><tbody>';
+        
+        const bk1 = data.comparison.best_team1;
+        const bk2 = data.comparison.best_team2;
+        
+        data.snapshots.forEach(snap => {
+            const t1Best = snap.bookmaker === bk1.bookmaker ? '⭐' : '';
+            const t2Best = snap.bookmaker === bk2.bookmaker ? '⭐' : '';
+            html += `<tr>
+                <td><strong>${snap.bookmaker}</strong></td>
+                <td class="text-info">${snap.team1_odds.toFixed(3)} ${t1Best}</td>
+                <td class="text-info">${snap.team2_odds.toFixed(3)} ${t2Best}</td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table>';
+        if (data.comparison.bookmaker_count > 0) {
+            html += `<div class="p-3 text-muted small">
+                <div>📊 Team 1 Avg: ${data.comparison.market_avg_team1?.toFixed(3)} | Spread: ${data.comparison.spread_team1?.toFixed(3)}</div>
+                <div>📊 Team 2 Avg: ${data.comparison.market_avg_team2?.toFixed(3)} | Spread: ${data.comparison.spread_team2?.toFixed(3)}</div>
+            </div>`;
+        }
+        
+        document.getElementById('odds-container').innerHTML = html;
+    } catch (err) {
+        console.error('Error loading odds:', err);
+        document.getElementById('odds-container').innerHTML = 
+            '<div class="alert alert-danger m-3">Failed to load odds</div>';
+    }
+}
+
+// Load history chart
+async function loadChart() {
+    try {
+        const res = await fetch('/api/matches/{{ match.id }}/history');
+        const data = await res.json();
+        
+        if (!data || data.length === 0) {
+            document.getElementById('oddsChart').parentElement.innerHTML = 
+                '<div class="alert alert-info">No history data available</div>';
+            return;
+        }
+
+        // Group by bookmaker
         const bookmakers = [...new Set(data.map(d => d.bookmaker))];
-        const datasets = bookmakers.slice(0, 5).map((bk, i) => {
-            const color = ['#0dcaf0','#ffc107','#dc3545','#00ff88','#6f42c1'][i % 5];
-            const points = data.filter(d => d.bookmaker === bk);
+        const colors = ['#0dcaf0', '#ffc107', '#dc3545', '#00ff88', '#6f42c1', '#17a2b8', '#20c997'];
+        
+        const datasets = bookmakers.slice(0, 7).map((bk, i) => {
+            const points = data.filter(d => d.bookmaker === bk)
+                .map(p => ({x: new Date(p.timestamp), y: p.team1_odds}))
+                .sort((a, b) => a.x - b.x);
+            
             return {
                 label: bk,
-                data: points.map(p => ({x: p.timestamp, y: p.team1_odds})),
-                borderColor: color,
+                data: points,
+                borderColor: colors[i % colors.length],
+                backgroundColor: colors[i % colors.length] + '20',
                 tension: 0.3,
-                pointRadius: 2,
+                fill: false,
+                pointRadius: 3,
+                pointHoverRadius: 5,
             };
         });
+
         new Chart(document.getElementById('oddsChart'), {
             type: 'line',
             data: { datasets },
             options: {
                 responsive: true,
-                scales: {
-                    x: { type: 'time', time: { unit: 'hour' } },
-                    y: { title: { display: true, text: 'Team 1 Odds' } }
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    title: { display: false }
                 },
-                plugins: { legend: { position: 'bottom' } }
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+                        title: { display: false },
+                    },
+                    y: {
+                        title: { display: true, text: 'Team 1 Odds' },
+                        beginAtZero: false,
+                    }
+                }
             }
         });
-    });
+    } catch (err) {
+        console.error('Error loading chart:', err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadOdds();
+    loadChart();
+});
 </script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
 {% endblock %}

@@ -40,85 +40,111 @@
             </div>
             <div class="card-body p-2">
                 <!-- Filter tabs -->
-                <ul class="nav nav-tabs nav-fill border-0 mb-3" id="signalTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active btn-sm" id="all-tab" data-bs-toggle="tab" data-bs-target="#all-pane" type="button" role="tab" onclick="loadSignalsByType('all')">All</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link btn-sm" id="arbitrage-tab" data-bs-toggle="tab" data-bs-target="#arbitrage-pane" type="button" role="tab" onclick="loadSignalsByType('arbitrage')">🔄 Arbitrage</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link btn-sm" id="steam-tab" data-bs-toggle="tab" data-bs-target="#steam-pane" type="button" role="tab" onclick="loadSignalsByType('steam_move')">💨 Steam</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link btn-sm" id="suspicious-tab" data-bs-toggle="tab" data-bs-target="#suspicious-pane" type="button" role="tab" onclick="loadSignalsByType('suspicious')">⚠️ Suspicious</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link btn-sm" id="value-tab" data-bs-toggle="tab" data-bs-target="#value-pane" type="button" role="tab" onclick="loadSignalsByType('value_bet')">💎 Value</button>
-                    </li>
-                </ul>
-
-                <div class="tab-content">
-                    <div class="tab-pane fade show active" id="all-pane">
-                        <div id="signals-list" class="list-group list-group-flush">
-                            {% for sig in signals %}
-                            <div class="list-group-item bg-dark signal-{{ sig.severity }}">
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %} me-2">
-                                            {{ sig.kind | replace("_", " ") | title }}
-                                        </span>
-                                        <small>{{ sig.title }}</small>
-                                    </div>
-                                    <small class="text-muted">{{ sig.detected_at.strftime('%H:%M') }}</small>
-                                </div>
-                            </div>
-                            {% else %}
-                            <div class="text-muted text-center py-4">
-                                No signals yet. Start polling to detect opportunities!
-                            </div>
-                            {% endfor %}
-                        </div>
-                        <div id="pagination" class="mt-3 text-center text-muted"></div>
-                    </div>
+                <div class="btn-group w-100 mb-3" role="group">
+                    <button type="button" class="btn btn-sm btn-outline-primary active" onclick="loadSignalsByType('all')">All</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadSignalsByType('arbitrage')">🔄 Arb</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadSignalsByType('steam_move')">💨 Steam</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadSignalsByType('suspicious')">⚠️ Sus</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadSignalsByType('value_bet')">💎 Value</button>
                 </div>
+
+                <div id="signals-list" class="list-group list-group-flush">
+                    {% for sig in signals %}
+                    <div class="list-group-item bg-dark signal-{{ sig.severity }}">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %} me-2">
+                                    {{ sig.kind | replace("_", " ") | title }}
+                                </span>
+                                <small>{{ sig.title }}</small>
+                            </div>
+                            <small class="text-muted">{{ sig.detected_at.strftime('%H:%M') }}</small>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-muted text-center py-4">
+                        No signals yet. Start polling to detect opportunities!
+                    </div>
+                    {% endfor %}
+                </div>
+                <div id="pagination" class="mt-3 text-center text-muted"></div>
             </div>
         </div>
     </div>
 
-    <!-- Recent matches -->
+    <!-- Current & Upcoming matches -->
     <div class="col-lg-6">
-        <div class="card bg-dark border-secondary">
-            <div class="card-header d-flex justify-content-between">
-                <h5 class="mb-0">🎮 Upcoming Matches</h5>
-                <span class="badge bg-secondary">CS2</span>
+        <!-- Nav for current/upcoming -->
+        <ul class="nav nav-tabs mb-2" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="upcoming-tab" data-bs-toggle="tab" data-bs-target="#upcoming" type="button">📅 Next 7 Days</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="all-matches-tab" data-bs-toggle="tab" data-bs-target="#all-matches" type="button">📊 Browse All</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- Upcoming -->
+            <div class="tab-pane fade show active" id="upcoming" role="tabpanel">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Match</th>
+                                        <th>Tournament</th>
+                                        <th>Time</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for m in matches %}
+                                    <tr>
+                                        <td><small>{{ m.team1_name }} vs {{ m.team2_name }}</small></td>
+                                        <td><small class="text-muted">{{ m.tournament }}</small></td>
+                                        <td><small>{{ m.start_time.strftime('%m-%d %H:%M') }}</small></td>
+                                        <td><a href="/match/{{ m.id }}" class="btn btn-sm btn-outline-primary">View</a></td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-muted text-center py-4">No matches in next 7 days</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Match</th>
-                                <th>Tournament</th>
-                                <th>Time</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for m in matches %}
-                            <tr>
-                                <td>{{ m.team1_name }} vs {{ m.team2_name }}</td>
-                                <td><small class="text-muted">{{ m.tournament }}</small></td>
-                                <td><small>{{ m.start_time.strftime('%m-%d %H:%M') }}</small></td>
-                                <td><a href="/match/{{ m.id }}" class="btn btn-sm btn-outline-primary">View</a></td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="4" class="text-muted text-center py-4">No matches yet.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+
+            <!-- All matches (loaded dynamically) -->
+            <div class="tab-pane fade" id="all-matches" role="tabpanel">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Match</th>
+                                        <th>Tournament</th>
+                                        <th>Status</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="all-matches-table">
+                                    <tr>
+                                        <td colspan="4" class="text-muted text-center py-4">
+                                            <div class="spinner-border spinner-border-sm" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -150,16 +176,44 @@ async function loadSignals() {
             data.signals.forEach(sig => {
                 const severityColor = sig.severity === 'critical' ? 'danger' : 
                                     sig.severity === 'warning' ? 'warning text-dark' : 'info';
+                
+                // Format meta nicely based on signal type
+                let metaHtml = '';
+                if (sig.meta && Object.keys(sig.meta).length > 0) {
+                    if (sig.kind === 'arbitrage') {
+                        const m = sig.meta;
+                        metaHtml = `<small class="d-block mt-1 text-warning">
+                            💰 ${m.profit_pct?.toFixed(2)}% | ${m.bk1} @ ${m.odds1?.toFixed(3)} (\$${m.stake1}) vs ${m.bk2} @ ${m.odds2?.toFixed(3)} (\$${m.stake2})
+                        </small>`;
+                    } else if (sig.kind === 'value_bet') {
+                        const m = sig.meta;
+                        metaHtml = `<small class="d-block mt-1 text-info">
+                            📊 ${m.odds?.toFixed(3)} vs sharp ${m.sharp_avg?.toFixed(3)} (+${m.diff_pct?.toFixed(1)}%)
+                        </small>`;
+                    } else if (sig.kind === 'steam_move') {
+                        const m = sig.meta;
+                        metaHtml = `<small class="d-block mt-1 text-warning">
+                            📉 ${m.old?.toFixed(3)} → ${m.new?.toFixed(3)} (${m.pct > 0 ? '+' : ''}${m.pct?.toFixed(1)}%)
+                        </small>`;
+                    } else if (sig.kind === 'suspicious' || sig.kind === 'consensus_move') {
+                        const m = sig.meta;
+                        metaHtml = `<small class="d-block mt-1 text-info">
+                            📌 ${m.books?.join(', ')}
+                        </small>`;
+                    }
+                }
+                
                 html += `
-                    <div class="list-group-item bg-dark signal-${sig.severity}">
+                    <div class="list-group-item bg-dark signal-${sig.severity} p-2">
                         <div class="d-flex justify-content-between">
-                            <div>
+                            <div style="flex: 1;">
                                 <span class="badge bg-${severityColor} me-2">
-                                    ${sig.kind.replace('_', ' ').charAt(0).toUpperCase() + sig.kind.replace('_', ' ').slice(1)}
+                                    ${sig.kind.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                                 </span>
                                 <small>${sig.title}</small>
+                                ${metaHtml}
                             </div>
-                            <small class="text-muted">${new Date(sig.detected_at).toLocaleTimeString()}</small>
+                            <small class="text-muted" style="white-space: nowrap;">${new Date(sig.detected_at).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})}</small>
                         </div>
                     </div>
                 `;
@@ -184,6 +238,39 @@ async function loadSignals() {
         document.getElementById('signals-list').innerHTML = '<div class="alert alert-danger">Failed to load signals</div>';
     }
 }
+
+// Load all matches
+async function loadAllMatches() {
+    try {
+        const res = await fetch('/api/matches?days=30');
+        const matches = await res.json();
+        
+        let html = '';
+        if (matches.length === 0) {
+            html = '<tr><td colspan="4" class="text-muted text-center py-4">No matches found</td></tr>';
+        } else {
+            matches.forEach(m => {
+                const now = new Date();
+                const start = new Date(m.start_time);
+                const status = start < now ? '✅ Live/Done' : '⏰ Upcoming';
+                html += `<tr>
+                    <td><small>${m.team1} vs ${m.team2}</small></td>
+                    <td><small class="text-muted">${m.tournament}</small></td>
+                    <td><small>${status}</small></td>
+                    <td><a href="/match/${m.id}" class="btn btn-sm btn-outline-primary">View</a></td>
+                </tr>`;
+            });
+        }
+        document.getElementById('all-matches-table').innerHTML = html;
+    } catch (err) {
+        console.error('Error loading matches:', err);
+        document.getElementById('all-matches-table').innerHTML = 
+            '<tr><td colspan="4" class="alert alert-danger">Failed to load matches</td></tr>';
+    }
+}
+
+// Load all matches when tab is clicked
+document.getElementById('all-matches-tab').addEventListener('click', loadAllMatches);
 
 document.addEventListener('DOMContentLoaded', function() {
     loadSignals();

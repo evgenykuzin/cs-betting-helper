@@ -17,9 +17,16 @@ templates = Jinja2Templates(directory="app/frontend/templates")
 
 @router.get("/")
 async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
-    # Recent matches
+    from datetime import datetime, timedelta, timezone
+    
+    # Upcoming matches (next 7 days)
+    now = datetime.now(timezone.utc)
+    future = now + timedelta(days=7)
     q = await db.execute(
-        select(Match).order_by(Match.start_time.desc()).limit(20)
+        select(Match)
+        .where((Match.start_time >= now) & (Match.start_time <= future))
+        .order_by(Match.start_time.asc())
+        .limit(20)
     )
     matches = q.scalars().all()
 

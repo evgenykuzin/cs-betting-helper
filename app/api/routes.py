@@ -45,26 +45,34 @@ async def list_matches(
 @router.get("/matches/{match_id}/odds")
 async def match_odds(match_id: int, db: AsyncSession = Depends(get_db)):
     """Latest odds per bookmaker (line shopping view)."""
-    # subquery: latest snapshot per bookmaker
-    sq = (
-        select(
-            OddsSnapshot.bookmaker,
-            func.max(OddsSnapshot.id).label("max_id"),
+    try:
+        # subquery: latest snapshot per bookmaker
+        sq = (
+            select(
+                OddsSnapshot.bookmaker,
+                func.max(OddsSnapshot.id).label("max_id"),
+            )
+            .where(OddsSnapshot.match_id == match_id)
+            .group_by(OddsSnapshot.bookmaker)
+            .subquery()
         )
-        .where(OddsSnapshot.match_id == match_id)
-        .group_by(OddsSnapshot.bookmaker)
-        .subquery()
-    )
-    q = await db.execute(
-        select(OddsSnapshot).join(sq, OddsSnapshot.id == sq.c.max_id)
-    )
-    rows = q.scalars().all()
-    snapshots = [
-        {"bookmaker": r.bookmaker, "team1_odds": r.team1_odds, "team2_odds": r.team2_odds, "timestamp": r.timestamp.isoformat()}
-        for r in rows
-    ]
-    comparison = compare_odds(snapshots)
-    return {"snapshots": snapshots, "comparison": comparison}
+        q = await db.execute(
+            select(OddsSnapshot).join(sq, OddsSnapshot.id == sq.c.max_id)
+        )
+        rows = q.scalars().all()
+        
+        if not rows:
+            return {"snapshots": [], "comparison": {}, "status": "no_data"}
+        
+        snapshots = [
+            {"bookmaker": r.bookmaker, "team1_odds": r.team1_odds, "team2_odds": r.team2_odds, "timestamp": r.timestamp.isoformat()}
+            for r in rows
+        ]
+        comparison = compare_odds(snapshots)
+        return {"snapshots": snapshots, "comparison": comparison, "status": "ok"}
+    except Exception as e:
+        log.exception("odds_fetch_error", match_id=match_id)
+        return {"snapshots": [], "comparison": {}, "status": "error", "error": str(e)}
 
 
 # ── Odds History (for charts) ────────────────────────────────────────
