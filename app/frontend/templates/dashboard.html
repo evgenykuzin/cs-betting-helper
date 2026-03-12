@@ -31,32 +31,56 @@
 </div>
 
 <div class="row">
-    <!-- Recent signals -->
+    <!-- Recent signals with filters -->
     <div class="col-lg-6">
         <div class="card bg-dark border-secondary">
-            <div class="card-header d-flex justify-content-between">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">⚡ Recent Signals</h5>
-                <span class="badge bg-secondary">Last 20</span>
+                <a href="/admin" class="btn btn-sm btn-outline-primary">⚙️ Configure</a>
             </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    {% for sig in signals %}
-                    <div class="list-group-item bg-dark signal-{{ sig.severity }}">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %} me-2">
-                                    {{ sig.kind | replace("_", " ") | title }}
-                                </span>
-                                <small>{{ sig.title }}</small>
+            <div class="card-body p-2">
+                <!-- Filter tabs -->
+                <ul class="nav nav-tabs nav-fill border-0 mb-3" id="signalTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active btn-sm" id="all-tab" data-bs-toggle="tab" data-bs-target="#all-pane" type="button" role="tab" onclick="loadSignalsByType('all')">All</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link btn-sm" id="arbitrage-tab" data-bs-toggle="tab" data-bs-target="#arbitrage-pane" type="button" role="tab" onclick="loadSignalsByType('arbitrage')">🔄 Arbitrage</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link btn-sm" id="steam-tab" data-bs-toggle="tab" data-bs-target="#steam-pane" type="button" role="tab" onclick="loadSignalsByType('steam_move')">💨 Steam</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link btn-sm" id="suspicious-tab" data-bs-toggle="tab" data-bs-target="#suspicious-pane" type="button" role="tab" onclick="loadSignalsByType('suspicious')">⚠️ Suspicious</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link btn-sm" id="value-tab" data-bs-toggle="tab" data-bs-target="#value-pane" type="button" role="tab" onclick="loadSignalsByType('value_bet')">💎 Value</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="all-pane">
+                        <div id="signals-list" class="list-group list-group-flush">
+                            {% for sig in signals %}
+                            <div class="list-group-item bg-dark signal-{{ sig.severity }}">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <span class="badge bg-{% if sig.severity == 'critical' %}danger{% elif sig.severity == 'warning' %}warning text-dark{% else %}info{% endif %} me-2">
+                                            {{ sig.kind | replace("_", " ") | title }}
+                                        </span>
+                                        <small>{{ sig.title }}</small>
+                                    </div>
+                                    <small class="text-muted">{{ sig.detected_at.strftime('%H:%M') }}</small>
+                                </div>
                             </div>
-                            <small class="text-muted">{{ sig.detected_at.strftime('%H:%M') }}</small>
+                            {% else %}
+                            <div class="text-muted text-center py-4">
+                                No signals yet. Start polling to detect opportunities!
+                            </div>
+                            {% endfor %}
                         </div>
+                        <div id="pagination" class="mt-3 text-center text-muted"></div>
                     </div>
-                    {% else %}
-                    <div class="list-group-item bg-dark text-muted text-center py-4">
-                        No signals yet. Start polling to detect opportunities!
-                    </div>
-                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -100,4 +124,69 @@
         </div>
     </div>
 </div>
+
+<script>
+let currentKind = null;
+let currentPage = 1;
+
+async function loadSignalsByType(kind) {
+    currentKind = kind === 'all' ? null : kind;
+    currentPage = 1;
+    await loadSignals();
+}
+
+async function loadSignals() {
+    try {
+        let url = `/api/signals?page=${currentPage}&limit=50`;
+        if (currentKind) url += `&kind=${currentKind}`;
+        
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        let html = '';
+        if (data.signals.length === 0) {
+            html = '<div class="text-muted text-center py-4">No signals found</div>';
+        } else {
+            data.signals.forEach(sig => {
+                const severityColor = sig.severity === 'critical' ? 'danger' : 
+                                    sig.severity === 'warning' ? 'warning text-dark' : 'info';
+                html += `
+                    <div class="list-group-item bg-dark signal-${sig.severity}">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <span class="badge bg-${severityColor} me-2">
+                                    ${sig.kind.replace('_', ' ').charAt(0).toUpperCase() + sig.kind.replace('_', ' ').slice(1)}
+                                </span>
+                                <small>${sig.title}</small>
+                            </div>
+                            <small class="text-muted">${new Date(sig.detected_at).toLocaleTimeString()}</small>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        document.getElementById('signals-list').innerHTML = html;
+        
+        // Pagination
+        if (data.pagination) {
+            let paginationHtml = '';
+            if (currentPage > 1) {
+                paginationHtml += `<a href="#" onclick="currentPage--; loadSignals(); return false;" class="btn btn-sm btn-outline-secondary">← Prev</a>`;
+            }
+            paginationHtml += `<span class="ms-2 me-2">Page ${data.pagination.page} of ${data.pagination.pages}</span>`;
+            if (currentPage < data.pagination.pages) {
+                paginationHtml += `<a href="#" onclick="currentPage++; loadSignals(); return false;" class="btn btn-sm btn-outline-secondary">Next →</a>`;
+            }
+            document.getElementById('pagination').innerHTML = paginationHtml;
+        }
+    } catch (err) {
+        console.error('Error loading signals:', err);
+        document.getElementById('signals-list').innerHTML = '<div class="alert alert-danger">Failed to load signals</div>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSignals();
+});
+</script>
 {% endblock %}

@@ -93,3 +93,42 @@ class Log(Base):
     __table_args__ = (
         Index("ix_logs_timestamp_level", "timestamp", "level"),
     )
+
+
+class SignalConfig(Base):
+    """
+    Configuration for signal filtering and routing.
+    Extensible: kind + severity combo determines behavior.
+    Can add new columns (channels, webhooks, etc.) later.
+    """
+    __tablename__ = "signal_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    kind = Column(String(50), nullable=False)  # arbitrage, steam_move, value_bet, etc.
+    severity = Column(String(20), nullable=False)  # info, warning, critical
+    enabled = Column(Boolean, nullable=False, server_default="true")
+    send_telegram = Column(Boolean, nullable=False, server_default="false")
+    description = Column(String(512))
+    config_json = Column(JSONB, nullable=True)  # Future: webhooks, filters, thresholds, etc.
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_signal_config_kind_severity", "kind", "severity"),
+    )
+
+
+class AdminConfig(Base):
+    """
+    Global admin settings (expandable key-value store).
+    Use for poll_interval, retention_days, thresholds, etc.
+    """
+    __tablename__ = "admin_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(100), unique=True, nullable=False, index=True)
+    value = Column(JSONB, nullable=False)  # Stores any JSON (int, bool, string, object)
+    description = Column(String(512))
+    category = Column(String(50))  # polling, analysis, alerts, etc.
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

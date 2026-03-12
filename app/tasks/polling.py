@@ -16,6 +16,7 @@ from app.providers.oddspapi import OddsPapiClient
 from app.analysis.engine import run_all, compare_odds
 from app.bot.telegram import send_signal_alert
 from app.core.config import get_settings
+from app.services.config_service import SignalConfigService
 
 log = structlog.get_logger()
 
@@ -162,8 +163,12 @@ async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings)
         )
         session.add(db_signal)
 
-        # Telegram alert for warning/critical
-        if sig.get("severity") in ("warning", "critical"):
+        # Check if this signal should go to telegram based on config
+        kind = sig["kind"]
+        severity = sig.get("severity", "info")
+        should_send = await SignalConfigService.should_send_telegram(session, kind, severity)
+        
+        if should_send:
             match_label = f"{fix.get('participant1Name')} vs {fix.get('participant2Name')}"
             await send_signal_alert(sig, match_label, fix.get("tournamentName", ""))
             await _write_log("INFO", "telegram", f"Alert sent: {sig['kind']}", {

@@ -67,3 +67,9 @@ async def match_detail(request: Request, match_id: int, db: AsyncSession = Depen
 async def logs_page(request: Request):
     """Live logs page."""
     return templates.TemplateResponse("logs.html", {"request": request})
+
+
+@router.get("/admin")
+async def admin_page(request: Request):
+    """Admin configuration panel."""
+    return templates.TemplateResponse("admin.html", {"request": request})

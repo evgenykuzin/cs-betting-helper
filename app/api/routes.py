@@ -97,24 +97,49 @@ async def match_odds_history(
 async def list_signals(
     kind: str | None = None,
     severity: str | None = None,
+    page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
+    """List signals with pagination and filtering."""
+    # Initialize defaults if needed
+    from app.services.config_service import SignalConfigService
+    await SignalConfigService.get_or_create_default(db)
+    
+    offset = (page - 1) * limit
     q = select(Signal).order_by(Signal.detected_at.desc())
+    
     if kind:
         q = q.where(Signal.kind == kind)
     if severity:
         q = q.where(Signal.severity == severity)
-    result = await db.execute(q.limit(limit))
+    
+    # Get total count
+    count_result = await db.execute(select(func.count(Signal.id)).where(
+        (Signal.kind == kind if kind else True) and
+        (Signal.severity == severity if severity else True)
+    ))
+    total = count_result.scalar() or 0
+    
+    result = await db.execute(q.offset(offset).limit(limit))
     rows = result.scalars().all()
-    return [
-        {
-            "id": s.id, "match_id": s.match_id, "kind": s.kind,
-            "severity": s.severity, "title": s.title,
-            "meta": s.meta_json, "detected_at": s.detected_at.isoformat(),
-        }
-        for s in rows
-    ]
+    
+    return {
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": (total + limit - 1) // limit,
+        },
+        "signals": [
+            {
+                "id": s.id, "match_id": s.match_id, "kind": s.kind,
+                "severity": s.severity, "title": s.title,
+                "meta": s.meta_json, "detected_at": s.detected_at.isoformat(),
+            }
+            for s in rows
+        ],
+    }
 
 
 # ── Volatility ───────────────────────────────────────────────────────

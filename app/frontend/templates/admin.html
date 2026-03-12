@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel — CS Betting Helper{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>⚙️ Admin Panel</h2>
+            <p class="text-muted">Configure signal routing, thresholds, and system behavior</p>
+        </div>
+    </div>
+
+    <!-- Nav tabs -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="signals-tab" data-bs-toggle="tab" data-bs-target="#signals-pane" type="button" role="tab">
+                📢 Signal Routing
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="config-tab" data-bs-toggle="tab" data-bs-target="#config-pane" type="button" role="tab">
+                🎛️ Global Settings
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab content -->
+    <div class="tab-content">
+        <!-- Signal Routing Tab -->
+        <div class="tab-pane fade show active" id="signals-pane" role="tabpanel">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header">
+                    <h5 class="mb-0">Signal Routing Configuration</h5>
+                    <small class="text-muted">Control which signals go to Telegram and other channels</small>
+                </div>
+                <div class="card-body">
+                    <div id="signals-list">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Settings Tab -->
+        <div class="tab-pane fade" id="config-pane" role="tabpanel">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header">
+                    <h5 class="mb-0">Global Configuration</h5>
+                    <small class="text-muted">Polling intervals, thresholds, retention policies</small>
+                </div>
+                <div class="card-body">
+                    <div id="config-list">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .signal-config-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        border-bottom: 1px solid rgba(255,255,255,.1);
+        gap: 10px;
+    }
+    .signal-config-row:last-child {
+        border-bottom: none;
+    }
+    .signal-config-info {
+        flex: 1;
+    }
+    .signal-config-controls {
+        display: flex;
+        gap: 10px;
+    }
+    .form-switch {
+        margin-top: 0;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadSignalConfigs();
+    loadAdminConfigs();
+});
+
+async function loadSignalConfigs() {
+    try {
+        const res = await fetch('/api/admin/signal-configs');
+        const data = await res.json();
+        
+        let html = '<div>';
+        data.configs.forEach(cfg => {
+            const statusClass = cfg.enabled ? 'text-success' : 'text-danger';
+            const statusText = cfg.enabled ? '✅ Enabled' : '❌ Disabled';
+            const telegramText = cfg.send_telegram ? '✓ TG' : '✗ TG';
+            
+            html += `
+                <div class="signal-config-row">
+                    <div class="signal-config-info">
+                        <div>
+                            <span class="badge bg-primary">${cfg.kind}</span>
+                            <span class="badge ${cfg.severity === 'critical' ? 'bg-danger' : cfg.severity === 'warning' ? 'bg-warning text-dark' : 'bg-info'}">${cfg.severity}</span>
+                        </div>
+                        <small class="text-muted d-block mt-1">${cfg.description || '(no description)'}</small>
+                    </div>
+                    <div class="signal-config-controls">
+                        <small class="${statusClass}">${statusText}</small>
+                        <small class="text-secondary">${telegramText}</small>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="editSignalConfig('${cfg.kind}', '${cfg.severity}')">Edit</button>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        document.getElementById('signals-list').innerHTML = html;
+    } catch (err) {
+        console.error('Failed to load signal configs:', err);
+        document.getElementById('signals-list').innerHTML = '<div class="alert alert-danger">Failed to load configs</div>';
+    }
+}
+
+async function loadAdminConfigs() {
+    try {
+        const res = await fetch('/api/admin/configs');
+        const data = await res.json();
+        
+        let html = '<div>';
+        data.configs.forEach(cfg => {
+            const valueStr = typeof cfg.value === 'object' ? JSON.stringify(cfg.value) : cfg.value;
+            html += `
+                <div class="signal-config-row">
+                    <div class="signal-config-info">
+                        <div>
+                            <strong>${cfg.key}</strong>
+                            <span class="badge bg-secondary ms-2">${cfg.category}</span>
+                        </div>
+                        <small class="text-muted d-block mt-1">${cfg.description || '(no description)'}</small>
+                        <small class="text-warning mt-2 d-block">Current: <code>${valueStr}</code></small>
+                    </div>
+                    <div class="signal-config-controls">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="editAdminConfig('${cfg.key}')">Edit</button>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        document.getElementById('config-list').innerHTML = html;
+    } catch (err) {
+        console.error('Failed to load admin configs:', err);
+        document.getElementById('config-list').innerHTML = '<div class="alert alert-danger">Failed to load configs</div>';
+    }
+}
+
+async function editSignalConfig(kind, severity) {
+    const enabled = prompt(`Enable ${kind}/${severity}? (true/false)`, 'true') === 'true';
+    const sendTg = prompt(`Send to Telegram? (true/false)`, 'false') === 'true';
+    
+    try {
+        const res = await fetch(`/api/admin/signal-configs/${kind}/${severity}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ enabled, send_telegram: sendTg })
+        });
+        if (res.ok) {
+            alert('Config updated!');
+            loadSignalConfigs();
+        } else {
+            alert('Failed to update config');
+        }
+    } catch (err) {
+        console.error('Error:', err);
+        alert('Error updating config');
+    }
+}
+
+async function editAdminConfig(key) {
+    const value = prompt(`Set value for ${key}:`);
+    if (value === null) return;
+    
+    try {
+        let jsonValue = value;
+        try {
+            jsonValue = JSON.parse(value);
+        } catch {
+            jsonValue = value;
+        }
+        
+        const res = await fetch(`/api/admin/configs/${key}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ value: jsonValue })
+        });
+        if (res.ok) {
+            alert('Config updated!');
+            loadAdminConfigs();
+        } else {
+            alert('Failed to update config');
+        }
+    } catch (err) {
+        console.error('Error:', err);
+        alert('Error updating config');
+    }
+}
+</script>
+{% endblock %}
