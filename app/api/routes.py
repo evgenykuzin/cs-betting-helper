@@ -3,9 +3,12 @@ REST API endpoints.
 """
 
 from datetime import datetime, timedelta
+
+from attr.validators import matches_re
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.db.models import Match, OddsSnapshot, Signal, Log
@@ -104,28 +107,45 @@ async def match_odds_history(
 
 @router.get("/odds")
 async def odds_list(
-        bookmaker: str | None = None,
         db: AsyncSession = Depends(get_db),
 ):
-    q = select(OddsSnapshot)
-    if bookmaker:
-        q = q.where(OddsSnapshot.bookmaker == bookmaker)
-    q = q.order_by(OddsSnapshot.timestamp)
-    result = await db.execute(q.limit(2000))
-    rows = result.scalars().all()
-    return [
-        {
-            "bookmaker": r.bookmaker,
-            "team1_odds": r.team1_odds,
-            "team2_odds": r.team2_odds,
-            "map1_team1_odds": r.map1_team1_odds,
-            "map1_team2_odds": r.map1_team2_odds,
-            "total_maps_over": r.total_maps_over,
-            "total_maps_under": r.total_maps_under,
-            "timestamp": r.timestamp.isoformat(),
-        }
-        for r in rows
-    ]
+    """
+    Возвращает все odds snapshots с информацией о матче внутри каждой ставки.
+    """
+    result = await db.execute(
+        select(OddsSnapshot)
+        .options(selectinload(OddsSnapshot.match))  # Загружаем матч вместе со ставкой
+        .order_by(OddsSnapshot.timestamp.desc())
+    )
+    odds_list = result.scalars().all()
+
+    response = []
+    for o in odds_list:
+        response.append({
+            "id": o.id,
+            "bookmaker": o.bookmaker,
+            "team1_odds": o.team1_odds,
+            "team2_odds": o.team2_odds,
+            "map1_team1_odds": o.map1_team1_odds,
+            "map1_team2_odds": o.map1_team2_odds,
+            "total_maps_over": o.total_maps_over,
+            "total_maps_under": o.total_maps_under,
+            "timestamp": o.timestamp.isoformat(),
+            "match": {
+                "id": o.match.id,
+                "external_id": o.match.external_id,
+                "sport": o.match.sport,
+                "tournament": o.match.tournament,
+                "team1_name": o.match.team1_name,
+                "team2_name": o.match.team2_name,
+                "start_time": o.match.start_time.isoformat(),
+                "source": o.match.source,
+                "created_at": o.match.created_at.isoformat(),
+                "updated_at": o.match.updated_at.isoformat(),
+            },
+        })
+
+    return {"count": len(response), "odds": response}
 
 
 # ── Signals ──────────────────────────────────────────────────────────
