@@ -49,7 +49,7 @@ async def _write_log(level: str, source: str, message: str, meta: dict | None = 
 
 @celery.task(name="app.tasks.polling.poll_all_matches")
 def poll_all_matches():
-    """Main periodic task: fetch fixtures → fetch odds → analyse → alert."""
+    """Main periodic task: fetch PREMATCH fixtures → fetch odds → analyse → alert."""
     _run_async(_poll_all_matches_async())
 
 
@@ -60,14 +60,16 @@ async def _poll_all_matches_async():
 
     try:
         try:
-            fixtures = await client.fetch_fixtures(sport="cs2", has_odds=True)
+            # Fetch ONLY prematch fixtures (statusId=0) to avoid mixing with live odds
+            # This ensures detect_consensus works on pure prematch data
+            fixtures = await client.fetch_prematch_fixtures(sport="cs2", window_hours=48)
         except Exception as e:
-            log.error("fetch_fixtures_failed", error=str(e))
-            await _write_log("ERROR", "polling", f"fetch_fixtures failed: {e}")
+            log.error("fetch_prematch_fixtures_failed", error=str(e))
+            await _write_log("ERROR", "polling", f"fetch_prematch_fixtures failed: {e}")
             return
 
-        log.info("poll_start", fixtures=len(fixtures))
-        await _write_log("INFO", "polling", f"Poll started, {len(fixtures)} fixtures")
+        log.info("poll_prematch_start", prematch_fixtures=len(fixtures))
+        await _write_log("INFO", "polling", f"Prematch poll started, {len(fixtures)} fixtures")
 
         async with factory() as session:
             for fix in fixtures:

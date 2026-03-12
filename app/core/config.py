@@ -9,7 +9,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # --- OddsPapi ---
-    oddspapi_api_key: str
+    oddspapi_api_key: str = "382a1cac-be33-4942-a4a6-70fcc60cb16d"
     oddspapi_base_url: str = "https://api.oddspapi.io/v4"
 
     # --- Postgres ---

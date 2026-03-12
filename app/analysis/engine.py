@@ -142,17 +142,31 @@ def detect_steam_moves(
 
 # ─── 4. Value Bet / Sharp vs Soft ────────────────────────────────────
 
-# Books known to be sharp / take heavy action (their odds reflect real money)
-SHARP_BOOKS = {"pinnacle", "singbet", "sbobet"}
+# Sharp books: no/high limits, react fast to insider money, market-makers
+# These detect real action first before soft books adjust
+SHARP_BOOKS = {
+    "pinnacle",      # no limits, hedges through action
+    "betfair",       # exchange, true market price
+    "singbet",       # asian sharp
+    "sbobet",        # asian sharp
+    "matchbook",     # exchange
+    "inbet",         # known sharp for esports
+    "asianodds",     # asian sharp
+    "bookmaker.eu",  # professional market
+}
 
-# Books that are known to be mainstream / soft (usually follow the market)
-# Anything NOT in this set is treated as potentially sharp/outlier
+# Soft books: mainstream, follow the market, adjust slower
+# These are the "herd" that we compare against sharp books
 SOFT_BOOKS = {
-    "vave", "vbet", "betika", "betway", "betway.es", "dafabet",
+    "vave", "vbet", "betika", "dafabet",
+    "betway", "betway.es",  # mid-tier, soft for niche sports like CS2
     "unibet", "unibet.dk", "unibet.ie", "unibet.ro", "unibet.se", "unibet.com.au",
-    "casumo", "leovegas", "leovegas.es", "betplay", "betrivers", "tabtouch",
-    "sportybet", "scooore.be", "bingoal.be", "rushbet.co", "stake.bet.br",
-    "betmgm.co.uk", "svenskaspel", "polymarket",
+    "casumo", "leovegas", "leovegas.es",
+    "betplay", "betrivers", "tabtouch", "sportybet",
+    "scooore.be", "bingoal.be", "rushbet.co", "stake.bet.br",
+    "betmgm.co.uk", "svenskaspel",
+    "polymarket",  # retail-heavy betting
+    "lottoland",   # retail
 }
 
 def detect_value_bets(snapshots: list[dict], cfg: Settings) -> list[dict]:

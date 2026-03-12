@@ -93,6 +93,41 @@ class OddsPapiClient:
         log.info("fetched_fixtures", sport=sport, count=len(data))
         return data
 
+    async def fetch_prematch_fixtures(
+        self,
+        sport: str = "cs2",
+        window_hours: int = 48,
+    ) -> list[dict]:
+        """
+        Fetch ONLY prematch fixtures (statusId=0).
+        Prevents mixing live/prematch odds and reduces unnecessary API calls.
+
+        Args:
+            sport: sport code (cs2, lol, etc)
+            window_hours: how far ahead to look (default 48h)
+
+        Returns:
+            List of fixtures with statusId=0 (not yet started) and hasOdds=true
+        """
+        sport_id = SPORT_IDS.get(sport.lower())
+        if not sport_id:
+            raise ValueError(f"Unknown sport {sport}")
+
+        now = datetime.utcnow()
+        from_date = now
+        to_date = now + timedelta(hours=window_hours)
+
+        params = {
+            "sportId": sport_id,
+            "statusId": 0,  # ← CRITICAL: 0=prematch, 1=live, 2=finished, 3=cancelled
+            "hasOdds": "true",
+            "from": from_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "to": to_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        data = await self._get("/fixtures", params)
+        log.info("fetched_prematch_fixtures", sport=sport, count=len(data), window_hours=window_hours)
+        return data
+
     async def fetch_odds(self, fixture_id: str) -> dict:
         return await self._get("/odds", {"fixtureId": fixture_id})
 
