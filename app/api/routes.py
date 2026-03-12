@@ -109,7 +109,7 @@ async def list_signals(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
-    """List signals with pagination and filtering."""
+    """List signals with pagination, filtering, and match context."""
     # Initialize defaults if needed
     from app.services.config_service import SignalConfigService
     await SignalConfigService.get_or_create_default(db)
@@ -132,6 +132,29 @@ async def list_signals(
     result = await db.execute(q.offset(offset).limit(limit))
     rows = result.scalars().all()
     
+    # Enrich signals with match data
+    signals_with_match = []
+    for s in rows:
+        # Get match info
+        match_result = await db.execute(select(Match).where(Match.id == s.match_id))
+        match = match_result.scalar_one_or_none()
+        
+        signals_with_match.append({
+            "id": s.id,
+            "match_id": s.match_id,
+            "kind": s.kind,
+            "severity": s.severity,
+            "title": s.title,
+            "meta": s.meta_json,
+            "detected_at": s.detected_at.isoformat(),
+            "match": {
+                "team1": match.team1_name if match else "Unknown",
+                "team2": match.team2_name if match else "Unknown",
+                "tournament": match.tournament if match else "Unknown",
+                "start_time": match.start_time.isoformat() if match else None,
+            } if match else None,
+        })
+    
     return {
         "pagination": {
             "page": page,
@@ -139,14 +162,7 @@ async def list_signals(
             "total": total,
             "pages": (total + limit - 1) // limit,
         },
-        "signals": [
-            {
-                "id": s.id, "match_id": s.match_id, "kind": s.kind,
-                "severity": s.severity, "title": s.title,
-                "meta": s.meta_json, "detected_at": s.detected_at.isoformat(),
-            }
-            for s in rows
-        ],
+        "signals": signals_with_match,
     }
 
 

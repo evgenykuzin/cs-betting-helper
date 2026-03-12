@@ -289,7 +289,12 @@ async function loadSignals() {
                 
                 const kindLabel = sig.kind.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                 
-                // Extract team names and odds from title if possible
+                // Extract match info
+                const matchTeams = sig.match ? `${sig.match.team1} vs ${sig.match.team2}` : 'Match TBD';
+                const matchTournament = sig.match?.tournament || 'Unknown';
+                const matchTime = sig.match?.start_time ? new Date(sig.match.start_time).toLocaleDateString('en-GB', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'TBD';
+                
+                // Extract signal details from title
                 const titleParts = sig.title.split(':');
                 const mainInfo = titleParts[0].trim();
                 const details = titleParts.length > 1 ? titleParts[1].trim() : '';
@@ -297,7 +302,13 @@ async function loadSignals() {
                 html += `
                     <div class="card bg-dark border-0 mb-3 shadow-sm" style="border-left: 4px solid ${sig.severity === 'critical' ? '#dc3545' : sig.severity === 'warning' ? '#ffc107' : '#0dcaf0'};">
                         <div class="card-body p-3">
-                            <!-- Header row -->
+                            <!-- Match context header -->
+                            <div class="mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+                                <div class="fw-bold small text-light">${matchTeams}</div>
+                                <div class="small text-muted">🏆 ${matchTournament} • 🕐 ${matchTime}</div>
+                            </div>
+                            
+                            <!-- Signal header row -->
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <div>
                                     <span class="badge ${severityBg} me-2">${severityIcon} ${kindLabel}</span>
@@ -305,7 +316,7 @@ async function loadSignals() {
                                 <small class="text-muted">${time}</small>
                             </div>
                             
-                            <!-- Main content -->
+                            <!-- Signal content -->
                             <div class="mb-2">
                                 <div class="fw-bold small text-light">${mainInfo}</div>
                                 ${details ? `<small class="text-muted d-block mt-1">${details}</small>` : ''}
