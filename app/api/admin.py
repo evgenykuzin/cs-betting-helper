@@ -189,15 +189,32 @@ async def update_tournament(
     description: str = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Update tournament config."""
+    """Update tournament config (enable/disable, tier, description)."""
     try:
-        tournament = await TournamentConfigService.toggle_tournament(db, tournament_id, enabled)
-        if tier:
+        # Fetch current tournament
+        from sqlalchemy import select
+        result = await db.execute(
+            select(TournamentConfig).where(TournamentConfig.tournament_id == tournament_id)
+        )
+        tournament = result.scalars().first()
+        if not tournament:
+            raise ValueError(f"Tournament {tournament_id} not found")
+
+        # Update enabled if provided
+        if enabled is not None:
+            tournament.enabled = bool(enabled)
+
+        # Update tier if provided
+        if tier is not None:
             tournament.tier = tier
-        if description:
+
+        # Update description if provided
+        if description is not None:
             tournament.description = description
+
         db.add(tournament)
         await db.commit()
+        await db.refresh(tournament)
 
         return {
             "id": tournament.id,

@@ -344,15 +344,23 @@ function filterTournaments(filter) {
 
 async function toggleTournament(tournamentId, enabled) {
     try {
+        // Ensure enabled is boolean, not undefined/null
+        const enabledValue = Boolean(enabled);
+        console.log(`Toggling tournament ${tournamentId} to enabled=${enabledValue}`);
+
         const res = await fetch(`/api/admin/tournaments/${tournamentId}`, {
             method: 'PATCH',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ enabled })
+            body: JSON.stringify({ enabled: enabledValue })
         });
+
         if (res.ok) {
-            loadTournaments();
+            console.log('Tournament updated successfully');
+            await loadTournaments();
         } else {
-            alert('Failed to update tournament');
+            const error = await res.json();
+            console.error('Failed:', error);
+            alert(`Failed to update tournament: ${error.detail}`);
         }
     } catch (err) {
         console.error('Error:', err);

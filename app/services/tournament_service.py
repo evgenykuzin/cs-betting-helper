@@ -9,11 +9,17 @@ from app.db.models import TournamentConfig
 class TournamentConfigService:
     """Manage tournament whitelists and tiers."""
 
-    # Default tournaments from Amy's curated list
+    # Default tournaments from Amy's curated list (Tier 2 - analyzed by default)
     DEFAULT_TOURNAMENTS = [
+        (23873, "CCT South America", "tier2"),
         (43533, "CCT European Series", "tier2"),
+        (43539, "CCT North American Series", "tier2"),
+        (44293, "Exort Series", "tier2"),
         (44609, "United21", "tier2"),
         (49568, "NODWIN Clutch Series", "tier2"),
+        (13661, "ESEA Premier Division", "tier2"),
+        (44751, "Game Zone Masters", "tier2"),
+        (43553, "ESL Challenger League Europe", "tier2"),
         (43005, "YaLLa Compass", "tier2"),
         (45693, "Dust2.dk Ligaen", "tier2"),
         (43709, "European Pro League", "tier2"),
@@ -21,16 +27,12 @@ class TournamentConfigService:
         (47429, "Winline Insight", "tier2"),
         (44607, "Galaxy Battle", "tier2"),
         (44391, "A1 Gaming League", "tier2"),
-        (23873, "CCT South America", "tier2"),
-        (44293, "Exort Series", "tier2"),
-        (44751, "Game Zone Masters", "tier2"),
-        (36211, "ESL Challenger", "tier2"),
-        (43517, "Hell Cup", "tier2"),
-        (50616, "Roman Imperium Cup V", "tier2"),
-        (49652, "JB Pro League", "tier2"),
-        (46857, "Svenska CS Ligan", "tier2"),
-        (46885, "Y-Games PRO Series", "tier2"),
         (43547, "ESL Challenger League South America", "tier2"),
+        (43545, "ESL Challenger League North America", "tier2"),
+        (49600, "JB Pro League", "tier2"),
+        (44605, "Svenska Cupen", "tier2"),
+        (46885, "Y-Games PRO Series", "tier2"),
+        (43517, "Hell Cup", "tier2"),
     ]
 
     # Tier 1 majors to exclude
@@ -46,12 +48,13 @@ class TournamentConfigService:
     async def initialize_defaults(session: AsyncSession) -> None:
         """
         Seed default tournaments on first run.
-        Idempotent: won't create duplicates.
+        Idempotent: won't create duplicates (checks before insert).
         """
         all_tournaments = TournamentConfigService.DEFAULT_TOURNAMENTS + TournamentConfigService.TIER1_TOURNAMENTS
+        added_count = 0
 
         for tournament_id, tournament_name, tier in all_tournaments:
-            # Check if already exists
+            # Check if already exists (synchronous within transaction)
             result = await session.execute(
                 select(TournamentConfig).where(TournamentConfig.tournament_id == tournament_id)
             )
@@ -65,8 +68,10 @@ class TournamentConfigService:
                     enabled=(tier != "tier1"),  # Tier1 disabled by default
                 )
                 session.add(config)
+                added_count += 1
 
-        await session.commit()
+        if added_count > 0:
+            await session.commit()
 
     @staticmethod
     async def get_enabled_tournaments(
@@ -97,7 +102,10 @@ class TournamentConfigService:
         tournament_id: int,
         enabled: bool,
     ) -> TournamentConfig:
-        """Enable/disable a tournament."""
+        """Enable/disable a tournament. Enabled must be bool, not None."""
+        if enabled is None:
+            raise ValueError("enabled must be True or False, not None")
+
         result = await session.execute(
             select(TournamentConfig).where(TournamentConfig.tournament_id == tournament_id)
         )
@@ -105,7 +113,7 @@ class TournamentConfigService:
         if not config:
             raise ValueError(f"Tournament {tournament_id} not found")
 
-        config.enabled = enabled
+        config.enabled = bool(enabled)
         session.add(config)
         await session.commit()
         return config
