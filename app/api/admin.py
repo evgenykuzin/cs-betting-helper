@@ -343,6 +343,24 @@ async def toggle_user_alerts(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+# ─── Polling Control ────────────────────────────────────────────────
+
+@router.post("/polling/trigger")
+async def trigger_polling():
+    """Manually trigger polling task (useful for testing)."""
+    from app.tasks.polling import poll_all_matches
+    
+    try:
+        task = poll_all_matches.delay()
+        return {
+            "status": "triggered",
+            "task_id": task.id,
+            "message": "Polling task queued. Check worker logs for progress.",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ─── Health ────────────────────────────────────────────────────────
 
 @router.get("/health")
