@@ -282,11 +282,18 @@ async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings)
         log.debug("telegram_check", fixture_id=fixture_id, kind=kind, severity=severity, should_send=should_send)
         
         if should_send:
-            match_label = f"{team1} vs {team2}"
+            # Build match context for rich card formatting
+            match_context = {
+                "team1": team1,
+                "team2": team2,
+                "tournament": tournament,
+                "start_time": start_time,
+                "current_odds": current_snapshots,
+            }
             log.info("sending_telegram_alert", fixture_id=fixture_id, signal_kind=sig["kind"])
-            await send_signal_alert(sig, match_label, tournament)
+            await send_signal_alert(sig, match_context)
             await _write_log("INFO", "telegram", f"Alert sent: {sig['kind']}", {
-                "match": match_label, "title": sig["title"],
+                "match": f"{team1} vs {team2}", "title": sig["title"],
             })
 
     if signals:

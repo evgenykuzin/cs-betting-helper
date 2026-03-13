@@ -24,6 +24,7 @@ def upgrade() -> None:
         sa.Column('telegram_id', sa.BigInteger(), nullable=False, unique=True),
         sa.Column('username', sa.String(255), nullable=True),
         sa.Column('first_name', sa.String(255), nullable=True),
+        sa.Column('language', sa.String(10), nullable=False, server_default='en'),
         sa.Column('enabled', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('receive_alerts', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),

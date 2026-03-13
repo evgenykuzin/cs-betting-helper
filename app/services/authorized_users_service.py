@@ -12,10 +12,11 @@ log = structlog.get_logger()
 class AuthorizedUsersService:
     """Manage authorized Telegram users."""
 
-    # Default authorized user IDs (hardcoded for now, can move to config)
+    # Default authorized user IDs
+    # Format: (telegram_id, username, first_name, language)
     DEFAULT_AUTHORIZED_IDS = [
-        (328018558, "jekajops", "Евгений"),  # Евгений
-        (343305553, "amywrenfanboy", "Amy"),  # Amy
+        (328018558, "jekajops", "Евгений", "en"),
+        (343305553, "amywrenfanboy", "Amy", "en"),
     ]
 
     @staticmethod
@@ -32,11 +33,12 @@ class AuthorizedUsersService:
         log.info("authorized_users_seeding_start")
         added_count = 0
 
-        for telegram_id, username, first_name in AuthorizedUsersService.DEFAULT_AUTHORIZED_IDS:
+        for telegram_id, username, first_name, language in AuthorizedUsersService.DEFAULT_AUTHORIZED_IDS:
             user = AuthorizedUser(
                 telegram_id=telegram_id,
                 username=username,
                 first_name=first_name,
+                language=language,
                 enabled=True,
                 receive_alerts=True,
             )
