@@ -347,7 +347,7 @@ async def toggle_user_alerts(
 
 @router.post("/polling/trigger")
 async def trigger_polling():
-    """Manually trigger polling task (useful for testing)."""
+    """Manually trigger polling task (fetches new odds from OddsPapi)."""
     from app.tasks.polling import poll_all_matches
     
     try:
@@ -356,6 +356,26 @@ async def trigger_polling():
             "status": "triggered",
             "task_id": task.id,
             "message": "Polling task queued. Check worker logs for progress.",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/reanalysis/trigger")
+async def trigger_reanalysis():
+    """Reanalyze all existing matches (no new OddsPapi fetch)."""
+    from app.tasks.reanalysis import reanalyze_all_matches
+    
+    try:
+        # Run reanalysis in background
+        import asyncio
+        loop = asyncio.get_event_loop()
+        result = await reanalyze_all_matches()
+        return {
+            "status": "completed",
+            "matches_processed": result["matches_processed"],
+            "signals_generated": result["signals_generated"],
+            "message": "Reanalysis complete. Check logs for details.",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
