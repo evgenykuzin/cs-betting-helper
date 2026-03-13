@@ -132,3 +132,25 @@ class AdminConfig(Base):
     category = Column(String(50))  # polling, analysis, alerts, etc.
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class TournamentConfig(Base):
+    """
+    Tournament whitelist / configuration.
+    Allows Amy to manage which tournaments to analyze.
+    Supports tier-based filtering (e.g., exclude Tier 1 majors).
+    """
+    __tablename__ = "tournament_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tournament_id = Column(Integer, unique=True, nullable=False, index=True)
+    tournament_name = Column(String(255), nullable=False)
+    enabled = Column(Boolean, nullable=False, server_default="true", index=True)
+    tier = Column(String(20), nullable=False, server_default="tier2")  # tier1, tier2, tier3, tier4, other
+    description = Column(String(512))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_tournament_enabled_tier", "enabled", "tier"),
+    )

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.services.config_service import SignalConfigService, AdminConfigService
+from app.services.tournament_service import TournamentConfigService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -139,6 +140,119 @@ async def create_admin_config(
         "category": cfg.category,
         "description": cfg.description,
     }
+
+
+# ─── Tournament Config ────────────────────────────────────────────────
+
+@router.get("/tournaments")
+async def list_tournaments(
+    enabled: bool = Query(None, description="Filter by enabled status"),
+    tier: str = Query(None, description="Filter by tier"),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all tournaments in config, optionally filtered."""
+    # Initialize on first run
+    await TournamentConfigService.initialize_defaults(db)
+
+    # Get all tournaments
+    all_tournaments = await TournamentConfigService.get_enabled_tournaments(db, exclude_tier=None)
+
+    # Apply filters
+    result = all_tournaments
+    if enabled is not None:
+        result = [t for t in result if t.enabled == enabled]
+    if tier:
+        result = [t for t in result if t.tier == tier]
+
+    return {
+        "count": len(result),
+        "tournaments": [
+            {
+                "id": t.id,
+                "tournament_id": t.tournament_id,
+                "tournament_name": t.tournament_name,
+                "enabled": t.enabled,
+                "tier": t.tier,
+                "description": t.description,
+                "updated_at": t.updated_at.isoformat(),
+            }
+            for t in result
+        ],
+    }
+
+
+@router.patch("/tournaments/{tournament_id}")
+async def update_tournament(
+    tournament_id: int,
+    enabled: bool = None,
+    tier: str = None,
+    description: str = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update tournament config."""
+    try:
+        tournament = await TournamentConfigService.toggle_tournament(db, tournament_id, enabled)
+        if tier:
+            tournament.tier = tier
+        if description:
+            tournament.description = description
+        db.add(tournament)
+        await db.commit()
+
+        return {
+            "id": tournament.id,
+            "tournament_id": tournament.tournament_id,
+            "tournament_name": tournament.tournament_name,
+            "enabled": tournament.enabled,
+            "tier": tournament.tier,
+            "description": tournament.description,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/tournaments")
+async def create_tournament(
+    tournament_id: int,
+    tournament_name: str,
+    tier: str = "tier2",
+    enabled: bool = True,
+    description: str = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a new tournament to the whitelist."""
+    try:
+        tournament = await TournamentConfigService.add_tournament(
+            db, tournament_id, tournament_name, tier, enabled
+        )
+        if description:
+            tournament.description = description
+            db.add(tournament)
+            await db.commit()
+
+        return {
+            "id": tournament.id,
+            "tournament_id": tournament.tournament_id,
+            "tournament_name": tournament.tournament_name,
+            "enabled": tournament.enabled,
+            "tier": tournament.tier,
+            "description": tournament.description,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.delete("/tournaments/{tournament_id}")
+async def delete_tournament(
+    tournament_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a tournament from the whitelist."""
+    try:
+        await TournamentConfigService.delete_tournament(db, tournament_id)
+        return {"status": "deleted", "tournament_id": tournament_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ─── Health ────────────────────────────────────────────────────────

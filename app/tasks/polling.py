@@ -17,6 +17,7 @@ from app.analysis.engine import run_all, compare_odds
 from app.bot.telegram import send_signal_alert
 from app.core.config import get_settings
 from app.services.config_service import SignalConfigService
+from app.services.tournament_service import TournamentConfigService
 
 log = structlog.get_logger()
 
@@ -58,20 +59,36 @@ async def _poll_all_matches_async():
     client = OddsPapiClient()
     factory = get_session_factory()
 
-    try:
+    async with factory() as session:
         try:
-            # Fetch ONLY prematch fixtures (statusId=0) to avoid mixing with live odds
-            # This ensures detect_consensus works on pure prematch data
-            fixtures = await client.fetch_prematch_fixtures(sport="cs2", window_hours=48)
-        except Exception as e:
-            log.error("fetch_prematch_fixtures_failed", error=str(e))
-            await _write_log("ERROR", "polling", f"fetch_prematch_fixtures failed: {e}")
-            return
+            # Initialize tournament configs on first run
+            await TournamentConfigService.initialize_defaults(session)
 
-        log.info("poll_prematch_start", prematch_fixtures=len(fixtures))
-        await _write_log("INFO", "polling", f"Prematch poll started, {len(fixtures)} fixtures")
+            # Get enabled tournaments (exclude Tier1)
+            tournament_ids_str = await TournamentConfigService.get_tournament_ids_string(
+                session, exclude_tier="tier1"
+            )
+            if not tournament_ids_str:
+                log.warning("no_enabled_tournaments")
+                await _write_log("WARNING", "polling", "No enabled tournaments configured")
+                return
 
-        async with factory() as session:
+            try:
+                # Fetch ONLY prematch fixtures from enabled tournaments
+                # This ensures detect_consensus works on pure prematch data
+                fixtures = await client.fetch_prematch_fixtures(sport="cs2", window_hours=48)
+                # Filter by tournament
+                enabled_ids = set(int(t) for t in tournament_ids_str.split(","))
+                fixtures = [f for f in fixtures if f.get("tournamentId") in enabled_ids]
+
+            except Exception as e:
+                log.error("fetch_prematch_fixtures_failed", error=str(e))
+                await _write_log("ERROR", "polling", f"fetch_prematch_fixtures failed: {e}")
+                return
+
+            log.info("poll_prematch_start", prematch_fixtures=len(fixtures), tournaments=len(enabled_ids))
+            await _write_log("INFO", "polling", f"Prematch poll started, {len(fixtures)} fixtures from {len(enabled_ids)} tournaments")
+
             for fix in fixtures:
                 try:
                     await _process_fixture(fix, client, session, settings)
@@ -80,8 +97,8 @@ async def _poll_all_matches_async():
                     await _write_log("ERROR", "polling", f"Fixture error {fix.get('fixtureId')}: {e}")
             await session.commit()
 
-    finally:
-        await client.close()
+        finally:
+            await client.close()
 
 
 async def _process_fixture(fix: dict, client: OddsPapiClient, session, settings):
