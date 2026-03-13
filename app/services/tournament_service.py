@@ -49,29 +49,40 @@ class TournamentConfigService:
         """
         Seed default tournaments on first run.
         Idempotent: won't create duplicates (checks before insert).
+        Only runs if table is empty — safety check against accidental data loss.
         """
+        import structlog
+        log = structlog.get_logger()
+
+        # Check if tournaments table already has data
+        result = await session.execute(select(TournamentConfig))
+        existing_count = len(result.scalars().all())
+
+        if existing_count > 0:
+            log.debug("tournament_defaults_already_seeded", existing_count=existing_count)
+            return  # Already seeded, skip
+
+        log.info("tournament_defaults_seeding_start")
         all_tournaments = TournamentConfigService.DEFAULT_TOURNAMENTS + TournamentConfigService.TIER1_TOURNAMENTS
         added_count = 0
 
         for tournament_id, tournament_name, tier in all_tournaments:
-            # Check if already exists (synchronous within transaction)
-            result = await session.execute(
-                select(TournamentConfig).where(TournamentConfig.tournament_id == tournament_id)
+            config = TournamentConfig(
+                tournament_id=tournament_id,
+                tournament_name=tournament_name,
+                tier=tier,
+                enabled=(tier != "tier1"),  # Tier1 disabled by default
             )
-            existing = result.scalars().first()
+            session.add(config)
+            added_count += 1
 
-            if not existing:
-                config = TournamentConfig(
-                    tournament_id=tournament_id,
-                    tournament_name=tournament_name,
-                    tier=tier,
-                    enabled=(tier != "tier1"),  # Tier1 disabled by default
-                )
-                session.add(config)
-                added_count += 1
-
-        if added_count > 0:
+        try:
             await session.commit()
+            log.info("tournament_defaults_seeded", added_count=added_count)
+        except Exception as e:
+            log.error("tournament_defaults_seed_failed", error=str(e), exc_info=True)
+            await session.rollback()
+            raise
 
     @staticmethod
     async def get_enabled_tournaments(

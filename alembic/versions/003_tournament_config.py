@@ -37,7 +37,20 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index('ix_tournament_enabled_tier', table_name='tournament_configs')
-    op.drop_index('ix_tournament_enabled', table_name='tournament_configs')
-    op.drop_index('ix_tournament_id', table_name='tournament_configs')
-    op.drop_table('tournament_configs')
+    """
+    ⚠️  DOWNGRADE IS DISABLED FOR PRODUCTION SAFETY ⚠️
+    
+    Downgrading would DELETE the tournament_configs table and lose all tournament settings.
+    This is NEVER safe to run on production.
+    
+    If you absolutely need to downgrade:
+    1. Backup the database first
+    2. Remove this protection manually
+    3. Run: alembic downgrade <target>
+    4. UNDERSTAND THE CONSEQUENCES
+    """
+    raise RuntimeError(
+        "Downgrade is disabled for safety. "
+        "This would delete tournament_configs table and all tournament settings. "
+        "If you need to downgrade, contact the DBA and manually remove this protection."
+    )

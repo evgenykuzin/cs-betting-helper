@@ -112,19 +112,20 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index('ix_admin_config_key', table_name='admin_configs')
-    op.drop_table('admin_configs')
-    op.drop_index('ix_signal_config_kind_severity', table_name='signal_configs')
-    op.drop_table('signal_configs')
-    op.drop_index('ix_logs_timestamp_level', table_name='logs')
-    op.drop_table('logs')
-    op.drop_index('ix_signals_detected', table_name='signals')
-    op.drop_index('ix_signals_kind_detected', table_name='signals')
-    op.drop_index('ix_signals_kind', table_name='signals')
-    op.drop_table('signals')
-    op.drop_index('ix_odds_timestamp', table_name='odds_snapshots')
-    op.drop_index('ix_odds_match_bk_ts', table_name='odds_snapshots')
-    op.drop_table('odds_snapshots')
-    op.drop_index('ix_matches_start_time', table_name='matches')
-    op.drop_index('ix_matches_external_id', table_name='matches')
-    op.drop_table('matches')
+    """
+    ⚠️  DOWNGRADE IS DISABLED FOR PRODUCTION SAFETY ⚠️
+    
+    Downgrading would DELETE all production data (matches, signals, odds snapshots).
+    This is NEVER safe to run on production.
+    
+    If you absolutely need to downgrade:
+    1. Backup the database first
+    2. Remove this protection manually
+    3. Run: alembic downgrade <target>
+    4. UNDERSTAND THE CONSEQUENCES
+    """
+    raise RuntimeError(
+        "Downgrade is disabled for safety. "
+        "This would delete all matches, signals, and odds data. "
+        "If you need to downgrade, contact the DBA and manually remove this protection."
+    )
