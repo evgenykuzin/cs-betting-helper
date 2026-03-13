@@ -6,6 +6,7 @@ from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models import TournamentConfig
 from app.db.session import get_db
 from app.services.config_service import SignalConfigService, AdminConfigService
 from app.services.tournament_service import TournamentConfigService
