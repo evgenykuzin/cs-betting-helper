@@ -18,6 +18,7 @@ from app.bot.telegram import send_signal_alert
 from app.core.config import get_settings
 from app.services.config_service import SignalConfigService
 from app.services.tournament_service import TournamentConfigService
+from app.services.authorized_users_service import AuthorizedUsersService
 
 log = structlog.get_logger()
 
@@ -99,6 +100,11 @@ async def _poll_all_matches_async():
             # Initialize tournament configs on first run
             await TournamentConfigService.initialize_defaults(session)
             log.debug("tournament_defaults_initialized")
+
+            log.debug("initializing_authorized_users")
+            # Initialize authorized users for alerts
+            await AuthorizedUsersService.initialize_defaults(session)
+            log.debug("authorized_users_initialized")
 
             # Get enabled tournaments (exclude Tier1)
             log.debug("fetching_enabled_tournaments")

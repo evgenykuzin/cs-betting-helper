@@ -154,3 +154,20 @@ class TournamentConfig(Base):
     __table_args__ = (
         Index("ix_tournament_enabled_tier", "enabled", "tier"),
     )
+
+
+class AuthorizedUser(Base):
+    """
+    Telegram users authorized to receive alerts.
+    Amy can manage who gets alerts via admin panel.
+    """
+    __tablename__ = "authorized_users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    telegram_id = Column(Integer, unique=True, nullable=False, index=True)
+    username = Column(String(255))  # @username if available
+    first_name = Column(String(255))  # First name from Telegram
+    enabled = Column(Boolean, nullable=False, server_default="true", index=True)
+    receive_alerts = Column(Boolean, nullable=False, server_default="true", index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

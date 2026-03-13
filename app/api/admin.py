@@ -10,6 +10,7 @@ from app.db.models import TournamentConfig
 from app.db.session import get_db
 from app.services.config_service import SignalConfigService, AdminConfigService
 from app.services.tournament_service import TournamentConfigService
+from app.services.authorized_users_service import AuthorizedUsersService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -269,6 +270,75 @@ async def delete_tournament(
     try:
         await TournamentConfigService.delete_tournament(db, tournament_id)
         return {"status": "deleted", "tournament_id": tournament_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ─── Authorized Users ────────────────────────────────────────────────
+
+@router.get("/users")
+async def list_authorized_users(db: AsyncSession = Depends(get_db)):
+    """List all authorized users receiving alerts."""
+    from app.db.models import AuthorizedUser
+    from sqlalchemy import select
+    
+    result = await db.execute(
+        select(AuthorizedUser).where(AuthorizedUser.enabled == True)
+    )
+    users = result.scalars().all()
+    
+    return {
+        "count": len(users),
+        "users": [
+            {
+                "id": u.id,
+                "telegram_id": u.telegram_id,
+                "username": u.username,
+                "first_name": u.first_name,
+                "enabled": u.enabled,
+                "receive_alerts": u.receive_alerts,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in users
+        ],
+    }
+
+
+@router.post("/users/register")
+async def register_user(
+    telegram_id: int,
+    username: str = None,
+    first_name: str = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a Telegram user for alerts."""
+    try:
+        user = await AuthorizedUsersService.add_user(
+            db, telegram_id, username, first_name
+        )
+        return {
+            "status": "registered",
+            "telegram_id": user.telegram_id,
+            "username": user.username,
+            "first_name": user.first_name,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/users/{telegram_id}/alerts")
+async def toggle_user_alerts(
+    telegram_id: int,
+    enabled: bool,
+    db: AsyncSession = Depends(get_db),
+):
+    """Enable/disable alerts for a user."""
+    try:
+        user = await AuthorizedUsersService.toggle_alerts(db, telegram_id, enabled)
+        return {
+            "telegram_id": user.telegram_id,
+            "receive_alerts": user.receive_alerts,
+        }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

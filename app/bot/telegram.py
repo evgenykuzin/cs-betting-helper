@@ -1,10 +1,15 @@
 """
 Telegram notifications via aiogram.
+Sends alerts to all authorized users.
 """
 
 import structlog
 from aiogram import Bot
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import get_settings
+from app.db.session import get_session_factory
+from app.services.authorized_users_service import AuthorizedUsersService
 
 log = structlog.get_logger()
 
@@ -27,10 +32,10 @@ SEVERITY_EMOJI = {
 
 
 async def send_signal_alert(signal: dict, match_label: str, tournament: str):
-    """Send a formatted alert to Telegram."""
+    """Send a formatted alert to all authorized Telegram users."""
     s = get_settings()
-    if not s.telegram_bot_token or not s.telegram_chat_id:
-        log.warning("telegram_not_configured")
+    if not s.telegram_bot_token:
+        log.warning("telegram_bot_token_not_configured")
         return
 
     emoji = SEVERITY_EMOJI.get(signal.get("severity", "info"), "📌")
@@ -59,21 +64,55 @@ async def send_signal_alert(signal: dict, match_label: str, tournament: str):
 
     text = "\n".join(lines)
 
-    try:
+    # Get all authorized users from DB
+    factory = get_session_factory()
+    async with factory() as session:
+        authorized_users = await AuthorizedUsersService.get_all_active(session)
+        
+        if not authorized_users:
+            log.warning("no_authorized_users_for_alerts")
+            return
+
         bot = _get_bot()
-        await bot.send_message(chat_id=s.telegram_chat_id, text=text, parse_mode="HTML")
-        log.info("telegram_sent", kind=signal["kind"])
-    except Exception:
-        log.exception("telegram_send_error")
+        sent_count = 0
+        failed_count = 0
+
+        for user in authorized_users:
+            try:
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=text,
+                    parse_mode="HTML"
+                )
+                sent_count += 1
+                log.debug("alert_sent_to_user", telegram_id=user.telegram_id, kind=signal["kind"])
+            except Exception as e:
+                failed_count += 1
+                log.warning("alert_send_failed", telegram_id=user.telegram_id, error=str(e))
+
+        log.info("telegram_alerts_sent", total=len(authorized_users), sent=sent_count, failed=failed_count, kind=signal["kind"])
 
 
 async def send_message(text: str):
-    """Send raw message."""
+    """Send raw message to all authorized users."""
     s = get_settings()
-    if not s.telegram_bot_token or not s.telegram_chat_id:
+    if not s.telegram_bot_token:
         return
-    try:
-        bot = _get_bot()
-        await bot.send_message(chat_id=s.telegram_chat_id, text=text, parse_mode="HTML")
-    except Exception:
-        log.exception("telegram_send_error")
+
+    factory = get_session_factory()
+    async with factory() as session:
+        authorized_users = await AuthorizedUsersService.get_all_active(session)
+
+    if not authorized_users:
+        return
+
+    bot = _get_bot()
+    for user in authorized_users:
+        try:
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=text,
+                parse_mode="HTML"
+            )
+        except Exception:
+            log.exception("telegram_send_error", telegram_id=user.telegram_id)
