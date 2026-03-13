@@ -383,8 +383,8 @@ def run_all(
     cfg = cfg or get_settings()
     previous_snapshots = previous_snapshots or []
     signals: list[dict] = []
-
-    signals.extend(detect_arbitrage(current_snapshots, cfg))
+    # No need arbitrage now
+    # signals.extend(detect_arbitrage(current_snapshots, cfg))
     signals.extend(detect_value_bets(current_snapshots, cfg))
     signals.extend(detect_steam_moves(current_snapshots, previous_snapshots, cfg))
     # detect_consensus runs always: Mode A works without previous data,
