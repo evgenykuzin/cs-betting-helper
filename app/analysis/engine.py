@@ -316,18 +316,21 @@ def detect_consensus(
                     books_dropped.append(bk)
 
             if len(books_dropped) >= cfg.suspicious_books_moved:
+                # Predict opposite team wins (books are dropping on this team)
+                opposite_team = "Team 2" if label == "Team 1" else "Team 1"
                 signals.append({
                     "kind": "suspicious",
                     "severity": "critical",
-                    "title": f"Steam: {len(books_dropped)} books dropped {label} this cycle",
-                    "meta": {"team": team_key, "books": books_dropped, "mode": "temporal"},
+                    "title": f"Suspicious: {len(books_dropped)} books dropped on {label} → {opposite_team} will win",
+                    "meta": {"team": team_key, "books": books_dropped, "mode": "temporal", "prediction": opposite_team},
                 })
             elif len(books_dropped) >= 3:
+                opposite_team = "Team 2" if label == "Team 1" else "Team 1"
                 signals.append({
                     "kind": "consensus_move",
                     "severity": "warning",
-                    "title": f"Consensus move: {len(books_dropped)} books dropped {label}",
-                    "meta": {"team": team_key, "books": books_dropped, "mode": "temporal"},
+                    "title": f"Consensus move: {len(books_dropped)} books dropped on {label} → {opposite_team}",
+                    "meta": {"team": team_key, "books": books_dropped, "mode": "temporal", "prediction": opposite_team},
                 })
 
     return signals
