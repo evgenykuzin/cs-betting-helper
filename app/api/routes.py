@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.db.models import Match, OddsSnapshot, Signal, Log
-from app.analysis.engine import compare_odds, calc_volatility
+from app.analysis.engine import compare_odds
 from app.providers.oddspapi import OddsPapiClient
 
 router = APIRouter()
